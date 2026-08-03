@@ -483,16 +483,35 @@ export function App({
                         focus === "sidebar" ? focusedBorder : unfocusedBorder
                     }
                 >
-                    {commandDefs.map((cmd, i) => (
-                        <Text
-                            key={i}
-                            color={failedProcs.has(i) ? "#ef4444" : cmd.color}
-                        >
-                            {i === selectedIndex ? " ▶ " : "   "}
-                            {failedProcs.has(i) ? "✕ " : ""}
-                            {cmd.label}
-                        </Text>
-                    ))}
+                    {commandDefs.map((cmd, i) => {
+                        const selected = i === selectedIndex;
+                        const failed = failedProcs.has(i);
+                        const innerWidth = sidebarWidth - 2;
+                        const prefix = failed ? " ✕ " : "   ";
+                        const pad = Math.max(
+                            0,
+                            innerWidth - prefix.length - cmd.label.length,
+                        );
+                        return (
+                            <Text
+                                key={i}
+                                backgroundColor={
+                                    selected ? cmd.color : undefined
+                                }
+                                color={
+                                    selected
+                                        ? "#000000"
+                                        : failed
+                                          ? "#ef4444"
+                                          : cmd.color
+                                }
+                            >
+                                {prefix}
+                                {cmd.label}
+                                {" ".repeat(pad)}
+                            </Text>
+                        );
+                    })}
                 </Box>
                 <Box
                     flexDirection="column"

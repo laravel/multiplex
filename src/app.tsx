@@ -1,5 +1,5 @@
-import { Box, Text, useInput, useStdout } from "ink";
 import { type ChildProcess, spawn } from "node:child_process";
+import { Box, Text, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
 
@@ -9,7 +9,7 @@ export interface CommandDef {
     command: string[];
 }
 
-interface StreamLine {
+export interface StreamLine {
     cmdIndex: number;
     text: string;
 }
@@ -18,9 +18,11 @@ interface AppProps {
     commandDefs: CommandDef[];
     cwd: string;
     initialStreamMode: boolean;
+    outputRef?: { current: StreamLine[] };
+    procsRef?: { current: ChildProcess[] };
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
     return [
         parseInt(hex.slice(1, 3), 16),
         parseInt(hex.slice(3, 5), 16),
@@ -28,7 +30,13 @@ function hexToRgb(hex: string): [number, number, number] {
     ];
 }
 
-export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
+export function App({
+    commandDefs,
+    cwd,
+    initialStreamMode,
+    outputRef,
+    procsRef: externalProcsRef,
+}: AppProps) {
     const { stdout } = useStdout();
 
     const [rows, setRows] = useState(stdout?.rows ?? 24);
@@ -41,6 +49,7 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
     const [, setRenderTick] = useState(0);
     const [scrollOffset, setScrollOffset] = useState<number | null>(null);
     const [focus, setFocus] = useState<"sidebar" | "content">("sidebar");
+    const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
 
     const outputBuffersRef = useRef<string[]>(commandDefs.map(() => ""));
     const streamLinesRef = useRef<StreamLine[]>([]);
@@ -49,6 +58,10 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
     const matchCountRef = useRef(0);
     const matchLinesRef = useRef<number[]>([]);
     const totalLinesRef = useRef(0);
+
+    if (outputRef) {
+        outputRef.current = streamLinesRef.current;
+    }
 
     const pendingRender = useRef(false);
     const triggerRender = useCallback(() => {
@@ -82,19 +95,17 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
 
             const proc = spawn(spawnArgs[0], spawnArgs[1], {
                 cwd,
-                env: { ...process.env, FORCE_COLOR: "1" },
+                detached: true,
+                env: {
+                    ...process.env,
+                    FORCE_COLOR: "1",
+                    COLUMNS: String((stdout?.columns ?? 80) - 23),
+                },
                 stdio: ["ignore", "pipe", "pipe"],
             });
 
             const handleData = (data: Buffer) => {
                 const text = data.toString().replace(/\r/g, "");
-
-                if (
-                    outputBuffersRef.current[i] === "" &&
-                    !text.startsWith("\n")
-                ) {
-                    outputBuffersRef.current[i] = "\n";
-                }
                 outputBuffersRef.current[i] += text;
 
                 partialsRef.current[i] += text;
@@ -115,10 +126,22 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
             proc.stdout?.on("data", handleData);
             proc.stderr?.on("data", handleData);
 
+            proc.on("error", (err) => {
+                const errorMsg = `[Failed to start: ${err.message}]`;
+                outputBuffersRef.current[i] += `\n${errorMsg}`;
+                streamLinesRef.current.push({ cmdIndex: i, text: errorMsg });
+                setFailedProcs((prev) => new Set(prev).add(i));
+                triggerRender();
+            });
+
             proc.on("exit", (exitCode) => {
                 const exitMsg = `[Process exited with code ${exitCode}]`;
                 outputBuffersRef.current[i] += `\n${exitMsg}`;
                 streamLinesRef.current.push({ cmdIndex: i, text: exitMsg });
+
+                if (exitCode !== 0) {
+                    setFailedProcs((prev) => new Set(prev).add(i));
+                }
 
                 if (partialsRef.current[i].trim()) {
                     streamLinesRef.current.push({
@@ -135,11 +158,14 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
         });
 
         procsRef.current = procs;
+        if (externalProcsRef) {
+            externalProcsRef.current = procs;
+        }
 
         return () => {
             procs.forEach((proc) => {
                 try {
-                    proc.kill();
+                    process.kill(-proc.pid!, "SIGKILL");
                 } catch {}
             });
         };
@@ -234,7 +260,7 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
                     }
 
                     const total = totalLinesRef.current;
-                    const oh = streamMode ? rows - 1 : rows - 2;
+                    const oh = streamMode ? rows - 2 : rows - 4;
                     const maxOffset = Math.max(0, total - oh);
                     const newOffset = prev + 1;
 
@@ -253,7 +279,7 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
             } else {
                 setScrollOffset((prev) => {
                     const total = totalLinesRef.current;
-                    const oh = streamMode ? rows - 1 : rows - 2;
+                    const oh = streamMode ? rows - 2 : rows - 4;
                     const currentStart = prev ?? Math.max(0, total - oh);
 
                     return Math.max(0, currentStart - 1);
@@ -266,7 +292,7 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
 
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
     const sidebarWidth = 20;
-    const outputHeight = streamMode ? rows - 1 : rows - 4;
+    const outputHeight = streamMode ? rows - 2 : rows - 4;
 
     let displayLines: string[];
 
@@ -424,9 +450,9 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
     }
 
     const outputContent = visibleLines.map((line, i) => (
-        <Text key={i} wrap="truncate-end">
-            {line || " "}
-        </Text>
+        <Box key={i} height={1}>
+            <Text wrap="truncate-end">{line || " "}</Text>
+        </Box>
     ));
 
     if (streamMode) {
@@ -435,6 +461,7 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
                 <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
                     {outputContent}
                 </Box>
+                <Box height={1} />
                 <Box height={1} paddingLeft={1}>
                     {footer}
                 </Box>
@@ -457,8 +484,12 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
                     }
                 >
                     {commandDefs.map((cmd, i) => (
-                        <Text key={i} color={cmd.color}>
+                        <Text
+                            key={i}
+                            color={failedProcs.has(i) ? "#ef4444" : cmd.color}
+                        >
                             {i === selectedIndex ? " ▶ " : "   "}
+                            {failedProcs.has(i) ? "✕ " : ""}
                             {cmd.label}
                         </Text>
                     ))}
@@ -482,7 +513,6 @@ export function App({ commandDefs, cwd, initialStreamMode }: AppProps) {
                         borderLeft={false}
                         borderRight={false}
                         borderStyle="single"
-                        marginBottom={1}
                         paddingX={1}
                     >
                         <Text color="#888888">

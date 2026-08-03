@@ -18,6 +18,8 @@ interface AppProps {
     commandDefs: CommandDef[];
     cwd: string;
     initialStreamMode: boolean;
+    bufferSize?: number;
+    streamBufferSize?: number;
     outputRef?: { current: StreamLine[] };
     procsRef?: { current: ChildProcess[] };
 }
@@ -34,6 +36,8 @@ export function App({
     commandDefs,
     cwd,
     initialStreamMode,
+    bufferSize = 2000,
+    streamBufferSize = 10000,
     outputRef,
     procsRef: externalProcsRef,
 }: AppProps) {
@@ -108,6 +112,13 @@ export function App({
                 const text = data.toString().replace(/\r/g, "");
                 outputBuffersRef.current[i] += text;
 
+                const bufLines = outputBuffersRef.current[i].split("\n");
+                if (bufLines.length > bufferSize) {
+                    outputBuffersRef.current[i] = bufLines
+                        .slice(-bufferSize)
+                        .join("\n");
+                }
+
                 partialsRef.current[i] += text;
                 const lines = partialsRef.current[i].split("\n");
                 partialsRef.current[i] = lines.pop() ?? "";
@@ -118,6 +129,13 @@ export function App({
                             text: line,
                         });
                     }
+                }
+
+                if (streamLinesRef.current.length > streamBufferSize) {
+                    streamLinesRef.current.splice(
+                        0,
+                        streamLinesRef.current.length - streamBufferSize,
+                    );
                 }
 
                 triggerRender();

@@ -49,6 +49,12 @@ const program = new Command()
     .version("1.0.0")
     .option("--cwd <path>", "working directory for commands", process.cwd())
     .option("-s, --stream", "start in stream mode", false)
+    .option("--buffer-size <lines>", "max lines per command buffer", "2000")
+    .option(
+        "--stream-buffer-size <lines>",
+        "max lines in stream buffer",
+        "10000",
+    )
     .argument(
         "<commands...>",
         "commands as label,command or label,#color,command",
@@ -57,7 +63,12 @@ const program = new Command()
     )
     .parse();
 
-const opts = program.opts<{ cwd: string; stream: boolean }>();
+const opts = program.opts<{
+    cwd: string;
+    stream: boolean;
+    bufferSize: string;
+    streamBufferSize: string;
+}>();
 const commandDefs = program.processedArgs[0] as CommandDef[];
 
 process.stdout.write("\x1b[?1049h\x1b[?25l");
@@ -83,6 +94,8 @@ try {
             commandDefs={commandDefs}
             cwd={opts.cwd}
             initialStreamMode={opts.stream}
+            bufferSize={parseInt(opts.bufferSize, 10)}
+            streamBufferSize={parseInt(opts.streamBufferSize, 10)}
             outputRef={outputRef}
             procsRef={procsRef}
         />,

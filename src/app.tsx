@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
 
@@ -24,6 +24,11 @@ interface AppProps {
     procsRef?: { current: ChildProcess[] };
 }
 
+const SIDEBAR_WIDTH = 20;
+const CONTENT_BORDER = 2;
+const CONTENT_PADDING = 1;
+const SCROLLBAR_WIDTH = 2;
+
 export function hexToRgb(hex: string): [number, number, number] {
     return [
         parseInt(hex.slice(1, 3), 16),
@@ -42,6 +47,7 @@ export function App({
     procsRef: externalProcsRef,
 }: AppProps) {
     const { stdout } = useStdout();
+    const { exit } = useApp();
 
     const [rows, setRows] = useState(stdout?.rows ?? 24);
     const [cols, setCols] = useState(stdout?.columns ?? 80);
@@ -56,6 +62,7 @@ export function App({
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
 
     const outputBuffersRef = useRef<string[]>(commandDefs.map(() => ""));
+    const outputLineCountsRef = useRef<number[]>(commandDefs.map(() => 1));
     const streamLinesRef = useRef<StreamLine[]>([]);
     const partialsRef = useRef<string[]>(commandDefs.map(() => ""));
     const procsRef = useRef<ChildProcess[]>([]);
@@ -103,7 +110,13 @@ export function App({
                 env: {
                     ...process.env,
                     FORCE_COLOR: "1",
-                    COLUMNS: String((stdout?.columns ?? 80) - 23),
+                    COLUMNS: String(
+                        (stdout?.columns ?? 80) -
+                            SIDEBAR_WIDTH -
+                            CONTENT_BORDER -
+                            CONTENT_PADDING -
+                            SCROLLBAR_WIDTH,
+                    ),
                 },
                 stdio: ["ignore", "pipe", "pipe"],
             });
@@ -112,11 +125,20 @@ export function App({
                 const text = data.toString().replace(/\r/g, "");
                 outputBuffersRef.current[i] += text;
 
-                const bufLines = outputBuffersRef.current[i].split("\n");
-                if (bufLines.length > bufferSize) {
+                let newLines = 0;
+                for (let c = 0; c < text.length; c++) {
+                    if (text[c] === "\n") {
+                        newLines++;
+                    }
+                }
+                outputLineCountsRef.current[i] += newLines;
+
+                if (outputLineCountsRef.current[i] > bufferSize * 1.5) {
+                    const bufLines = outputBuffersRef.current[i].split("\n");
                     outputBuffersRef.current[i] = bufLines
                         .slice(-bufferSize)
                         .join("\n");
+                    outputLineCountsRef.current[i] = bufferSize;
                 }
 
                 partialsRef.current[i] += text;
@@ -131,7 +153,7 @@ export function App({
                     }
                 }
 
-                if (streamLinesRef.current.length > streamBufferSize) {
+                if (streamLinesRef.current.length > streamBufferSize * 1.5) {
                     streamLinesRef.current.splice(
                         0,
                         streamLinesRef.current.length - streamBufferSize,
@@ -248,6 +270,11 @@ export function App({
             }
         }
 
+        if (input === "q") {
+            exit();
+            return;
+        }
+
         if (input === "t") {
             setStreamMode((m) => !m);
             setCurrentMatch(0);
@@ -258,7 +285,16 @@ export function App({
 
         if (!streamMode && key.tab) {
             setFocus((f) => (f === "sidebar" ? "content" : "sidebar"));
+            return;
+        }
 
+        if (!streamMode && key.leftArrow) {
+            setFocus("sidebar");
+            return;
+        }
+
+        if (!streamMode && key.rightArrow) {
+            setFocus("content");
             return;
         }
 
@@ -306,10 +342,52 @@ export function App({
 
             return;
         }
+
+        if (key.pageDown) {
+            if (effectiveFocus === "content") {
+                const oh = streamMode ? rows - 2 : rows - 4;
+                setScrollOffset((prev) => {
+                    if (prev === null) {
+                        return null;
+                    }
+                    const total = totalLinesRef.current;
+                    const maxOffset = Math.max(0, total - oh);
+                    const newOffset = prev + oh;
+                    return newOffset >= maxOffset ? null : newOffset;
+                });
+            }
+            return;
+        }
+
+        if (key.pageUp) {
+            if (effectiveFocus === "content") {
+                const oh = streamMode ? rows - 2 : rows - 4;
+                setScrollOffset((prev) => {
+                    const total = totalLinesRef.current;
+                    const currentStart = prev ?? Math.max(0, total - oh);
+                    return Math.max(0, currentStart - oh);
+                });
+            }
+            return;
+        }
+
+        if (key.home) {
+            if (effectiveFocus === "content") {
+                setScrollOffset(0);
+            }
+            return;
+        }
+
+        if (key.end) {
+            if (effectiveFocus === "content") {
+                setScrollOffset(null);
+            }
+            return;
+        }
     });
 
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
-    const sidebarWidth = 20;
+    const sidebarWidth = SIDEBAR_WIDTH;
     const outputHeight = streamMode ? rows - 2 : rows - 4;
 
     let displayLines: string[];
@@ -437,6 +515,7 @@ export function App({
                   ["↑/↓", "scroll"],
                   ["/", "search"],
                   ["t", "tabs"],
+                  ["q", "quit"],
               ]
             : focus === "sidebar"
               ? [
@@ -444,12 +523,14 @@ export function App({
                     ["tab", "logs"],
                     ["/", "search"],
                     ["t", "stream"],
+                    ["q", "quit"],
                 ]
               : [
                     ["↑/↓", "scroll"],
                     ["tab", "tabs"],
                     ["/", "search"],
                     ["t", "stream"],
+                    ["q", "quit"],
                 ];
 
         footer = (
@@ -467,9 +548,40 @@ export function App({
         );
     }
 
+    const totalLines = displayLines.length;
+    const showScrollbar = totalLines > outputHeight;
+    let thumbStart = 0;
+    let thumbEnd = 0;
+
+    if (showScrollbar) {
+        const currentOffset =
+            scrollOffset ?? Math.max(0, totalLines - outputHeight);
+        const maxOffset = Math.max(1, totalLines - outputHeight);
+        const thumbSize = Math.max(
+            1,
+            Math.round((outputHeight / totalLines) * outputHeight),
+        );
+        thumbStart = Math.round(
+            (currentOffset / maxOffset) * (outputHeight - thumbSize),
+        );
+        thumbEnd = thumbStart + thumbSize;
+    }
+
     const outputContent = visibleLines.map((line, i) => (
         <Box key={i} height={1}>
-            <Text wrap="truncate-end">{line || " "}</Text>
+            <Box flexGrow={1}>
+                <Text wrap="truncate-end">{line || " "}</Text>
+            </Box>
+            {showScrollbar && (
+                <Text
+                    color={
+                        i >= thumbStart && i < thumbEnd ? "#666666" : "#333333"
+                    }
+                >
+                    {" "}
+                    {i >= thumbStart && i < thumbEnd ? "█" : "│"}
+                </Text>
+            )}
         </Box>
     ));
 

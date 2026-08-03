@@ -55,6 +55,7 @@ const program = new Command()
         "max lines in stream buffer",
         "10000",
     )
+    .option("--timestamps", "show timestamps in stream mode", false)
     .argument(
         "<commands...>",
         "commands as label,command or label,#color,command",
@@ -68,6 +69,7 @@ const opts = program.opts<{
     stream: boolean;
     bufferSize: string;
     streamBufferSize: string;
+    timestamps: boolean;
 }>();
 const commandDefs = program.processedArgs[0] as CommandDef[];
 
@@ -98,6 +100,7 @@ try {
             initialStreamMode={opts.stream}
             bufferSize={parseInt(opts.bufferSize, 10)}
             streamBufferSize={parseInt(opts.streamBufferSize, 10)}
+            timestamps={opts.timestamps}
             outputRef={outputRef}
             procsRef={procsRef}
         />,
@@ -118,8 +121,11 @@ if (outputRef.current.length > 0) {
         const cmd = commandDefs[sl.cmdIndex];
         const [r, g, b] = hexToRgb(cmd.color);
         const padding = " ".repeat(maxLabelLen - cmd.label.length);
+        const ts = opts.timestamps
+            ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
+            : "";
         process.stdout.write(
-            `\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
+            `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
         );
     }
 }

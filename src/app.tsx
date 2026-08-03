@@ -12,6 +12,7 @@ export interface CommandDef {
 export interface StreamLine {
     cmdIndex: number;
     text: string;
+    time: Date;
 }
 
 interface AppProps {
@@ -20,6 +21,7 @@ interface AppProps {
     initialStreamMode: boolean;
     bufferSize?: number;
     streamBufferSize?: number;
+    timestamps?: boolean;
     outputRef?: { current: StreamLine[] };
     procsRef?: { current: ChildProcess[] };
 }
@@ -43,6 +45,7 @@ export function App({
     initialStreamMode,
     bufferSize = 2000,
     streamBufferSize = 10000,
+    timestamps = false,
     outputRef,
     procsRef: externalProcsRef,
 }: AppProps) {
@@ -163,6 +166,7 @@ export function App({
                         streamLinesRef.current.push({
                             cmdIndex: i,
                             text: line,
+                            time: new Date(),
                         });
                     }
                 }
@@ -186,6 +190,7 @@ export function App({
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: errorMsg,
+                    time: new Date(),
                 });
                 setFailedProcs((prev) => new Set(prev).add(i));
                 triggerRender();
@@ -202,6 +207,7 @@ export function App({
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: exitMsg,
+                    time: new Date(),
                 });
 
                 if (exitCode !== 0 && exitCode !== null) {
@@ -212,6 +218,7 @@ export function App({
                     streamLinesRef.current.push({
                         cmdIndex: i,
                         text: partialsRef.current[i],
+                        time: new Date(),
                     });
                     partialsRef.current[i] = "";
                 }
@@ -342,6 +349,18 @@ export function App({
 
         if (input === "r" && !streamMode) {
             restartProcess(selectedIndex);
+            return;
+        }
+
+        if (input === "c") {
+            if (streamMode) {
+                streamLinesRef.current.length = 0;
+            } else {
+                outputBuffersRef.current[selectedIndex] = "";
+                outputLineCountsRef.current[selectedIndex] = 1;
+            }
+            setScrollOffset(null);
+            triggerRender();
             return;
         }
 
@@ -479,7 +498,10 @@ export function App({
             const cmd = commandDefs[sl.cmdIndex];
             const [r, g, b] = hexToRgb(cmd.color);
             const padding = " ".repeat(maxLabelLen - cmd.label.length);
-            return `\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
+            const ts = timestamps
+                ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
+                : "";
+            return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
         });
     } else {
         displayLines = outputBuffersRef.current[selectedIndex].split("\n");
@@ -595,6 +617,7 @@ export function App({
         const bindings = streamMode
             ? [
                   ["↑/↓", "scroll"],
+                  ["c", "clear"],
                   ["/", "search"],
                   ["t", "tabs"],
                   ["q", "quit"],
@@ -604,6 +627,7 @@ export function App({
                     ["↑/↓", "navigate"],
                     ["tab", "logs"],
                     ["r", "restart"],
+                    ["c", "clear"],
                     ["/", "search"],
                     ["t", "stream"],
                     ["q", "quit"],
@@ -611,6 +635,7 @@ export function App({
               : [
                     ["↑/↓", "scroll"],
                     ["tab", "tabs"],
+                    ["c", "clear"],
                     ["/", "search"],
                     ["t", "stream"],
                     ["q", "quit"],
@@ -630,9 +655,7 @@ export function App({
                     ))}
                 </Text>
                 <Box flexGrow={1} />
-                {hasNewOutput && (
-                    <Text color="#e5c07b">↓ new output </Text>
-                )}
+                {hasNewOutput && <Text color="#e5c07b">↓ new output </Text>}
             </Box>
         );
     }
@@ -706,29 +729,46 @@ export function App({
                         const selected = i === selectedIndex;
                         const failed = failedProcs.has(i);
                         const innerWidth = sidebarWidth - 2;
-                        const prefix = failed ? " ✕ " : "   ";
+                        const indicator = failed
+                            ? "✕"
+                            : i < 9
+                              ? `${i + 1}`
+                              : " ";
                         const pad = Math.max(
                             0,
-                            innerWidth - prefix.length - cmd.label.length,
+                            innerWidth - 3 - cmd.label.length,
                         );
+                        const bg = selected ? cmd.color : undefined;
                         return (
-                            <Text
-                                key={i}
-                                backgroundColor={
-                                    selected ? cmd.color : undefined
-                                }
-                                color={
-                                    selected
-                                        ? "#000000"
-                                        : failed
-                                          ? "#ef4444"
-                                          : cmd.color
-                                }
-                            >
-                                {prefix}
-                                {cmd.label}
-                                {" ".repeat(pad)}
-                            </Text>
+                            <Box key={i}>
+                                <Text
+                                    backgroundColor={bg}
+                                    color={
+                                        failed
+                                            ? "#ef4444"
+                                            : selected
+                                              ? "#000000"
+                                              : "#555555"
+                                    }
+                                    dimColor={!failed && !selected}
+                                >
+                                    {" "}
+                                    {indicator}{" "}
+                                </Text>
+                                <Text
+                                    backgroundColor={bg}
+                                    color={
+                                        selected
+                                            ? "#000000"
+                                            : failed
+                                              ? "#ef4444"
+                                              : cmd.color
+                                    }
+                                >
+                                    {cmd.label}
+                                    {" ".repeat(pad)}
+                                </Text>
+                            </Box>
                         );
                     })}
                 </Box>

@@ -60,22 +60,30 @@ export function App({
     const [scrollOffset, setScrollOffset] = useState<number | null>(null);
     const [focus, setFocus] = useState<"sidebar" | "content">("sidebar");
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
+    const [hasNewOutput, setHasNewOutput] = useState(false);
 
     const outputBuffersRef = useRef<string[]>(commandDefs.map(() => ""));
     const outputLineCountsRef = useRef<number[]>(commandDefs.map(() => 1));
     const streamLinesRef = useRef<StreamLine[]>([]);
     const partialsRef = useRef<string[]>(commandDefs.map(() => ""));
     const procsRef = useRef<ChildProcess[]>([]);
+    const restartingRef = useRef<Set<number>>(new Set());
     const matchCountRef = useRef(0);
     const matchLinesRef = useRef<number[]>([]);
     const totalLinesRef = useRef(0);
+    const scrollOffsetRef = useRef<number | null>(null);
 
     if (outputRef) {
         outputRef.current = streamLinesRef.current;
     }
 
+    scrollOffsetRef.current = scrollOffset;
+
     const pendingRender = useRef(false);
     const triggerRender = useCallback(() => {
+        if (scrollOffsetRef.current !== null) {
+            setHasNewOutput(true);
+        }
         if (!pendingRender.current) {
             pendingRender.current = true;
             setTimeout(() => {
@@ -97,7 +105,13 @@ export function App({
     }, [stdout]);
 
     useEffect(() => {
-        const procs = commandDefs.map((cmd, i) => {
+        if (scrollOffset === null) {
+            setHasNewOutput(false);
+        }
+    }, [scrollOffset]);
+
+    const spawnProcess = useCallback(
+        (cmd: CommandDef, i: number) => {
             const cmdStr = cmd.command.join(" ");
             const needsShell = /[&|;<>()]/.test(cmdStr);
             const spawnArgs: [string, string[]] = needsShell
@@ -169,17 +183,28 @@ export function App({
             proc.on("error", (err) => {
                 const errorMsg = `[Failed to start: ${err.message}]`;
                 outputBuffersRef.current[i] += `\n${errorMsg}`;
-                streamLinesRef.current.push({ cmdIndex: i, text: errorMsg });
+                streamLinesRef.current.push({
+                    cmdIndex: i,
+                    text: errorMsg,
+                });
                 setFailedProcs((prev) => new Set(prev).add(i));
                 triggerRender();
             });
 
             proc.on("exit", (exitCode) => {
+                if (restartingRef.current.has(i)) {
+                    restartingRef.current.delete(i);
+                    return;
+                }
+
                 const exitMsg = `[Process exited with code ${exitCode}]`;
                 outputBuffersRef.current[i] += `\n${exitMsg}`;
-                streamLinesRef.current.push({ cmdIndex: i, text: exitMsg });
+                streamLinesRef.current.push({
+                    cmdIndex: i,
+                    text: exitMsg,
+                });
 
-                if (exitCode !== 0) {
+                if (exitCode !== 0 && exitCode !== null) {
                     setFailedProcs((prev) => new Set(prev).add(i));
                 }
 
@@ -195,7 +220,45 @@ export function App({
             });
 
             return proc;
-        });
+        },
+        [cwd, bufferSize, streamBufferSize, triggerRender],
+    );
+
+    const restartProcess = useCallback(
+        (i: number) => {
+            restartingRef.current.add(i);
+            const proc = procsRef.current[i];
+            if (proc) {
+                try {
+                    if (proc.pid) {
+                        process.kill(-proc.pid, "SIGKILL");
+                    }
+                } catch {}
+            }
+
+            outputBuffersRef.current[i] = "";
+            outputLineCountsRef.current[i] = 1;
+            partialsRef.current[i] = "";
+            setFailedProcs((prev) => {
+                const next = new Set(prev);
+                next.delete(i);
+                return next;
+            });
+            setScrollOffset(null);
+
+            const newProc = spawnProcess(commandDefs[i], i);
+            procsRef.current[i] = newProc;
+            if (externalProcsRef) {
+                externalProcsRef.current[i] = newProc;
+            }
+
+            triggerRender();
+        },
+        [commandDefs, spawnProcess, triggerRender],
+    );
+
+    useEffect(() => {
+        const procs = commandDefs.map((cmd, i) => spawnProcess(cmd, i));
 
         procsRef.current = procs;
         if (externalProcsRef) {
@@ -205,11 +268,13 @@ export function App({
         return () => {
             procs.forEach((proc) => {
                 try {
-                    process.kill(-proc.pid!, "SIGKILL");
+                    if (proc.pid) {
+                        process.kill(-proc.pid, "SIGKILL");
+                    }
                 } catch {}
             });
         };
-    }, [commandDefs, cwd, triggerRender]);
+    }, [commandDefs, spawnProcess]);
 
     useInput((input, key) => {
         if (searchInputMode) {
@@ -272,6 +337,22 @@ export function App({
 
         if (input === "q") {
             exit();
+            return;
+        }
+
+        if (input === "r" && !streamMode) {
+            restartProcess(selectedIndex);
+            return;
+        }
+
+        if (input && input >= "1" && input <= "9") {
+            const idx = parseInt(input, 10) - 1;
+            if (idx < commandDefs.length) {
+                setSelectedIndex(idx);
+                setCurrentMatch(0);
+                setScrollOffset(null);
+                setHasNewOutput(false);
+            }
             return;
         }
 
@@ -381,6 +462,7 @@ export function App({
         if (key.end) {
             if (effectiveFocus === "content") {
                 setScrollOffset(null);
+                setHasNewOutput(false);
             }
             return;
         }
@@ -521,6 +603,7 @@ export function App({
               ? [
                     ["↑/↓", "navigate"],
                     ["tab", "logs"],
+                    ["r", "restart"],
                     ["/", "search"],
                     ["t", "stream"],
                     ["q", "quit"],
@@ -534,17 +617,23 @@ export function App({
                 ];
 
         footer = (
-            <Text>
-                {bindings.map(([k, desc], i) => (
-                    <Text key={i}>
-                        {i > 0 && <Text color="#555555"> </Text>}
-                        <Text color="#888888" bold>
-                            {k}
+            <Box width="100%">
+                <Text>
+                    {bindings.map(([k, desc], i) => (
+                        <Text key={i}>
+                            {i > 0 && <Text color="#555555"> </Text>}
+                            <Text color="#888888" bold>
+                                {k}
+                            </Text>
+                            <Text color="#555555"> {desc}</Text>
                         </Text>
-                        <Text color="#555555"> {desc}</Text>
-                    </Text>
-                ))}
-            </Text>
+                    ))}
+                </Text>
+                <Box flexGrow={1} />
+                {hasNewOutput && (
+                    <Text color="#e5c07b">↓ new output </Text>
+                )}
+            </Box>
         );
     }
 

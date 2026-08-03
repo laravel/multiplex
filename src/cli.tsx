@@ -83,7 +83,9 @@ const procsRef: { current: ChildProcess[] } = { current: [] };
 function killAll() {
     for (const proc of procsRef.current) {
         try {
-            process.kill(-proc.pid!, "SIGKILL");
+            if (proc.pid) {
+                process.kill(-proc.pid, "SIGKILL");
+            }
         } catch {}
     }
 }

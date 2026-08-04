@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
 import {
@@ -10,6 +10,35 @@ import {
     formatTimestamp,
     systemMsg,
 } from "./util.js";
+
+const hasNotifySend =
+    process.platform === "linux" &&
+    (() => {
+        try {
+            execSync("which notify-send", { stdio: "ignore" });
+            return true;
+        } catch {
+            return false;
+        }
+    })();
+
+function notify(title: string, message: string) {
+    try {
+        if (process.platform === "darwin") {
+            spawn("osascript", [
+                "-e",
+                `display notification "${message}" with title "${title}"`,
+            ], { stdio: "ignore", detached: true }).unref();
+        } else if (hasNotifySend) {
+            spawn("notify-send", [title, message], {
+                stdio: "ignore",
+                detached: true,
+            }).unref();
+        }
+    } catch {
+        //
+    }
+}
 
 type UseProcessesOptions = {
     commandDefs: CommandDef[];
@@ -207,6 +236,7 @@ export function useProcesses({
                         autoRestartTimersRef.current.set(i, timer);
                     } else {
                         setFailedProcs((prev) => new Set(prev).add(i));
+                        notify("Multiplex", `${cmd.label} crashed (exit code ${exitCode})`);
                     }
                 }
 

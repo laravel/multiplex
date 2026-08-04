@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { render } from "ink";
 import { App } from "./app.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
-import { hexToRgb } from "./util.js";
+import { formatTimestamp, hexToRgb } from "./util.js";
 
 const DEFAULT_COLORS = [
     "#93c5fd",
@@ -130,9 +130,7 @@ if (outputRef.current.length > 0) {
         const cmd = commandDefs[sl.cmdIndex];
         const [r, g, b] = hexToRgb(cmd.color);
         const padding = " ".repeat(maxLabelLen - cmd.label.length);
-        const ts = opts.timestamps
-            ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
-            : "";
+        const ts = opts.timestamps ? formatTimestamp(sl.time) : "";
 
         process.stdout.write(
             `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,

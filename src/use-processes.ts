@@ -6,6 +6,8 @@ import {
     CONTENT_PADDING,
     SCROLLBAR_WIDTH,
     SIDEBAR_WIDTH,
+    TIMESTAMP_WIDTH,
+    formatTimestamp,
     systemMsg,
 } from "./util.js";
 
@@ -14,6 +16,7 @@ type UseProcessesOptions = {
     cwd: string;
     bufferSize: number;
     streamBufferSize: number;
+    timestamps: boolean;
     stdout: NodeJS.WriteStream | undefined;
     triggerRender: () => void;
     outputRef?: OutputRef;
@@ -25,6 +28,7 @@ export function useProcesses({
     cwd,
     bufferSize,
     streamBufferSize,
+    timestamps,
     stdout,
     triggerRender,
     outputRef,
@@ -55,7 +59,8 @@ export function useProcesses({
                             SIDEBAR_WIDTH -
                             CONTENT_BORDER -
                             CONTENT_PADDING -
-                            SCROLLBAR_WIDTH,
+                            SCROLLBAR_WIDTH -
+                            (timestamps ? TIMESTAMP_WIDTH : 0),
                     ),
                 },
                 stdio: ["ignore", "pipe", "pipe"],
@@ -64,7 +69,9 @@ export function useProcesses({
             const handleData = (data: Buffer) => {
                 const text = data.toString().replace(/\r/g, "");
 
-                outputBuffersRef.current[i] += text;
+                if (!timestamps) {
+                    outputBuffersRef.current[i] += text;
+                }
 
                 let newLines = 0;
 
@@ -90,12 +97,19 @@ export function useProcesses({
 
                 partialsRef.current[i] = lines.pop() ?? "";
 
+                const now = new Date();
+                const tsPrefix = timestamps ? formatTimestamp(now) : "";
+
                 for (const line of lines) {
                     streamLinesRef.current.push({
                         cmdIndex: i,
                         text: line,
-                        time: new Date(),
+                        time: now,
                     });
+
+                    if (timestamps) {
+                        outputBuffersRef.current[i] += `${tsPrefix}${line}\n`;
+                    }
                 }
 
                 if (streamLinesRef.current.length > streamBufferSize * 1.5) {
@@ -112,13 +126,15 @@ export function useProcesses({
             proc.stderr?.on("data", handleData);
 
             proc.on("error", (err) => {
+                const now = new Date();
                 const errorMsg = systemMsg(`Failed to start: ${err.message}`);
+                const tsPrefix = timestamps ? formatTimestamp(now) : "";
 
-                outputBuffersRef.current[i] += `\n${errorMsg}`;
+                outputBuffersRef.current[i] += `\n${tsPrefix}${errorMsg}`;
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: errorMsg,
-                    time: new Date(),
+                    time: now,
                 });
 
                 setFailedProcs((prev) => new Set(prev).add(i));
@@ -132,13 +148,15 @@ export function useProcesses({
                     return;
                 }
 
+                const now = new Date();
                 const exitMsg = systemMsg(`Process exited with code ${exitCode}`);
+                const tsPrefix = timestamps ? formatTimestamp(now) : "";
 
-                outputBuffersRef.current[i] += `\n${exitMsg}`;
+                outputBuffersRef.current[i] += `\n${tsPrefix}${exitMsg}`;
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: exitMsg,
-                    time: new Date(),
+                    time: now,
                 });
 
                 if (exitCode !== 0 && exitCode !== null) {
@@ -159,7 +177,7 @@ export function useProcesses({
 
             return proc;
         },
-        [cwd, bufferSize, streamBufferSize, triggerRender],
+        [cwd, bufferSize, streamBufferSize, timestamps, triggerRender],
     );
 
     const restartProcess = useCallback(
@@ -178,16 +196,20 @@ export function useProcesses({
                 }
             }
 
-            const restartMsg = systemMsg(`Restarted at ${new Date().toLocaleTimeString("en-GB")}`);
+            const now = new Date();
+            const restartMsg = timestamps
+                ? systemMsg("Restarted")
+                : systemMsg(`Restarted at ${now.toLocaleTimeString("en-GB")}`);
+            const tsPrefix = timestamps ? formatTimestamp(now) : "";
 
-            outputBuffersRef.current[i] = `${restartMsg}\n`;
+            outputBuffersRef.current[i] = `${tsPrefix}${restartMsg}\n`;
             outputLineCountsRef.current[i] = 2;
             partialsRef.current[i] = "";
 
             streamLinesRef.current.push({
                 cmdIndex: i,
                 text: restartMsg,
-                time: new Date(),
+                time: now,
             });
 
             setFailedProcs((prev) => {
@@ -235,18 +257,22 @@ export function useProcesses({
 
     const clearOutput = useCallback(
         (index: number) => {
-            const clearMsg = systemMsg(`Cleared at ${new Date().toLocaleTimeString("en-GB")}`);
+            const now = new Date();
+            const clearMsg = timestamps
+                ? systemMsg("Cleared")
+                : systemMsg(`Cleared at ${now.toLocaleTimeString("en-GB")}`);
+            const tsPrefix = timestamps ? formatTimestamp(now) : "";
 
-            outputBuffersRef.current[index] = clearMsg;
+            outputBuffersRef.current[index] = `${tsPrefix}${clearMsg}`;
             outputLineCountsRef.current[index] = 1;
 
             streamLinesRef.current.push({
                 cmdIndex: index,
                 text: clearMsg,
-                time: new Date(),
+                time: now,
             });
         },
-        [commandDefs],
+        [timestamps],
     );
 
     const clearStream = useCallback(() => {

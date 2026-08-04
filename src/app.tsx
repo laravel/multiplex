@@ -4,7 +4,7 @@ import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
-import { hexToRgb, SIDEBAR_WIDTH } from "./util.js";
+import { formatTimestamp, hexToRgb, SIDEBAR_WIDTH } from "./util.js";
 
 type AppProps = {
     commandDefs: CommandDef[];
@@ -100,6 +100,7 @@ export function App({
         cwd,
         bufferSize,
         streamBufferSize,
+        timestamps,
         stdout,
         triggerRender,
         outputRef,
@@ -464,9 +465,7 @@ export function App({
               const cmd = commandDefs[sl.cmdIndex];
               const [r, g, b] = hexToRgb(cmd.color);
               const padding = " ".repeat(maxLabelLen - cmd.label.length);
-              const ts = timestamps
-                  ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
-                  : "";
+              const ts = timestamps ? formatTimestamp(sl.time) : "";
 
               return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
           });

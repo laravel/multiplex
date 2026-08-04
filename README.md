@@ -1,4 +1,4 @@
-# artisan-dev-tui
+# @laravel/multiplex
 
 A tabbed TUI for running multiple commands simultaneously with searchable, scrollable output. Built with [Ink](https://github.com/vadimdemedes/ink).
 
@@ -7,19 +7,19 @@ When you exit, all output is flushed to your terminal scrollback so you don't lo
 ## Install
 
 ```bash
-npm install -g artisan-dev-tui
+npm install -g @laravel/multiplex
 ```
 
 Or run directly:
 
 ```bash
-npx artisan-dev-tui 'server,php artisan serve' 'queue,php artisan queue:listen'
+npx @laravel/multiplex 'server,php artisan serve' 'queue,php artisan queue:listen'
 ```
 
 ## Usage
 
 ```bash
-artisan-dev-tui [options] <commands...>
+multiplex [options] <commands...>
 ```
 
 Each command is passed as a positional argument in the format:
@@ -35,16 +35,16 @@ Colors are optional hex values. If omitted, colors are assigned automatically fr
 
 ```bash
 # Basic usage
-artisan-dev-tui 'server,php artisan serve' 'queue,php artisan queue:listen' 'vite,pnpm run dev'
+multiplex 'server,php artisan serve' 'queue,php artisan queue:listen' 'vite,pnpm run dev'
 
 # With custom colors
-artisan-dev-tui 'server,#93c5fd,php artisan serve' 'queue,#fb7185,php artisan queue:listen'
+multiplex 'server,#93c5fd,php artisan serve' 'queue,#fb7185,php artisan queue:listen'
 
 # Start in stream mode with timestamps
-artisan-dev-tui -s --timestamps 'server,php artisan serve' 'queue,php artisan queue:listen'
+multiplex -s --timestamps 'server,php artisan serve' 'queue,php artisan queue:listen'
 
 # Custom working directory
-artisan-dev-tui --cwd /path/to/project 'server,php artisan serve'
+multiplex --cwd /path/to/project 'server,php artisan serve'
 ```
 
 ### Options

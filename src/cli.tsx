@@ -44,7 +44,7 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
 }
 
 const program = new Command()
-    .name("artisan-dev-tui")
+    .name("multiplex")
     .description("Run multiple commands in a tabbed TUI with searchable output")
     .version("1.0.0")
     .option("--cwd <path>", "working directory for commands", process.cwd())

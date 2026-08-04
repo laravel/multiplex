@@ -67,6 +67,7 @@ export function App({
         scrollUp,
         pageDown,
         pageUp,
+        scrollToTop,
         scrollToBottom,
         resetScroll,
     } = useScroll(outputHeight);
@@ -450,6 +451,18 @@ export function App({
 
             if (key.pageUp) {
                 pageUp();
+
+                return;
+            }
+
+            if (input === "g") {
+                scrollToTop();
+
+                return;
+            }
+
+            if (input === "G") {
+                scrollToBottom();
 
                 return;
             }

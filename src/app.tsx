@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
+import { useScroll } from "./use-scroll.js";
 import { hexToRgb } from "./util.js";
 
 type AppProps = {
@@ -55,22 +56,30 @@ export function App({
     const [searchQuery, setSearchQuery] = useState("");
     const [currentMatch, setCurrentMatch] = useState(0);
     const [, setRenderTick] = useState(0);
-    const [scrollOffset, setScrollOffset] = useState<number | null>(null);
     const [focus, setFocus] = useState<"sidebar" | "content">("sidebar");
-    const [hasNewOutput, setHasNewOutput] = useState(false);
+
+    const outputHeight = streamMode ? rows - 2 : rows - 4;
+
+    const {
+        scrollOffset,
+        hasNewOutput,
+        totalLinesRef,
+        notifyNewOutput,
+        scrollDown,
+        scrollUp,
+        pageDown,
+        pageUp,
+        scrollToTop,
+        scrollToBottom,
+        resetScroll,
+    } = useScroll(outputHeight);
 
     const matchCountRef = useRef(0);
     const matchLinesRef = useRef<number[]>([]);
-    const totalLinesRef = useRef(0);
-    const scrollOffsetRef = useRef<number | null>(null);
-
-    scrollOffsetRef.current = scrollOffset;
 
     const pendingRender = useRef(false);
     const triggerRender = useCallback(() => {
-        if (scrollOffsetRef.current !== null) {
-            setHasNewOutput(true);
-        }
+        notifyNewOutput();
 
         if (!pendingRender.current) {
             pendingRender.current = true;
@@ -80,7 +89,7 @@ export function App({
                 setRenderTick((t) => t + 1);
             }, 16);
         }
-    }, []);
+    }, [notifyNewOutput]);
 
     const {
         outputBuffersRef,
@@ -112,12 +121,6 @@ export function App({
             stdout?.off("resize", handleResize);
         };
     }, [stdout]);
-
-    useEffect(() => {
-        if (scrollOffset === null) {
-            setHasNewOutput(false);
-        }
-    }, [scrollOffset]);
 
     const getVisibleLinesAndMatchCount = (
         lines: string[],
@@ -320,7 +323,7 @@ export function App({
             if (key.escape) {
                 setSearchQuery("");
                 setCurrentMatch(0);
-                setScrollOffset(null);
+                resetScroll();
 
                 return;
             }
@@ -359,7 +362,7 @@ export function App({
                 clearOutput(selectedIndex);
             }
 
-            setScrollOffset(null);
+            resetScroll();
             triggerRender();
 
             return;
@@ -371,8 +374,7 @@ export function App({
             if (idx < commandDefs.length) {
                 setSelectedIndex(idx);
                 setCurrentMatch(0);
-                setScrollOffset(null);
-                setHasNewOutput(false);
+                scrollToBottom();
             }
 
             return;
@@ -381,7 +383,7 @@ export function App({
         if (input === "t") {
             setStreamMode((m) => !m);
             setCurrentMatch(0);
-            setScrollOffset(null);
+            resetScroll();
 
             return;
         }
@@ -389,7 +391,7 @@ export function App({
         if (!streamMode) {
             if (input === "r") {
                 restartProcess(selectedIndex);
-                setScrollOffset(null);
+                resetScroll();
 
                 return;
             }
@@ -421,20 +423,9 @@ export function App({
                     Math.min(i + 1, commandDefs.length - 1),
                 );
                 setCurrentMatch(0);
-                setScrollOffset(null);
+                resetScroll();
             } else {
-                setScrollOffset((prev) => {
-                    if (prev === null) {
-                        return null;
-                    }
-
-                    const total = totalLinesRef.current;
-                    const oh = streamMode ? rows - 2 : rows - 4;
-                    const maxOffset = Math.max(0, total - oh);
-                    const newOffset = prev + 1;
-
-                    return newOffset >= maxOffset ? null : newOffset;
-                });
+                scrollDown();
             }
 
             return;
@@ -444,15 +435,9 @@ export function App({
             if (effectiveFocus === "sidebar") {
                 setSelectedIndex((i) => Math.max(i - 1, 0));
                 setCurrentMatch(0);
-                setScrollOffset(null);
+                resetScroll();
             } else {
-                setScrollOffset((prev) => {
-                    const total = totalLinesRef.current;
-                    const oh = streamMode ? rows - 2 : rows - 4;
-                    const currentStart = prev ?? Math.max(0, total - oh);
-
-                    return Math.max(0, currentStart - 1);
-                });
+                scrollUp();
             }
 
             return;
@@ -460,44 +445,25 @@ export function App({
 
         if (effectiveFocus === "content") {
             if (key.pageDown) {
-                const oh = streamMode ? rows - 2 : rows - 4;
-
-                setScrollOffset((prev) => {
-                    if (prev === null) {
-                        return null;
-                    }
-
-                    const total = totalLinesRef.current;
-                    const maxOffset = Math.max(0, total - oh);
-                    const newOffset = prev + oh;
-
-                    return newOffset >= maxOffset ? null : newOffset;
-                });
+                pageDown();
 
                 return;
             }
 
             if (key.pageUp) {
-                const oh = streamMode ? rows - 2 : rows - 4;
-
-                setScrollOffset((prev) => {
-                    const total = totalLinesRef.current;
-                    const currentStart = prev ?? Math.max(0, total - oh);
-                    return Math.max(0, currentStart - oh);
-                });
+                pageUp();
 
                 return;
             }
 
             if ((key as Record<string, boolean>).home) {
-                setScrollOffset(0);
+                scrollToTop();
 
                 return;
             }
 
             if ((key as Record<string, boolean>).end) {
-                setScrollOffset(null);
-                setHasNewOutput(false);
+                scrollToBottom();
 
                 return;
             }
@@ -506,7 +472,6 @@ export function App({
 
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
     const sidebarWidth = SIDEBAR_WIDTH;
-    const outputHeight = streamMode ? rows - 2 : rows - 4;
 
     const displayLines = !streamMode
         ? outputBuffersRef.current[selectedIndex].split("\n")
@@ -571,7 +536,7 @@ export function App({
                     }
                 >
                     {" "}
-                    {i >= thumbStart && i < thumbEnd ? "█" : "│"}
+                    {i >= thumbStart && i < thumbEnd ? "┃" : "│"}
                 </Text>
             )}
         </Box>
@@ -591,7 +556,7 @@ export function App({
         );
     }
 
-    const focusedBorder = "#61afef";
+    const focusedBorder = "#00ffff";
     const unfocusedBorder = "#333333";
 
     return (
@@ -662,11 +627,8 @@ export function App({
                 >
                     <Box
                         borderColor={
-                            focus === "content"
-                                ? focusedBorder
-                                : unfocusedBorder
+                            focus === "content" ? "#666666" : unfocusedBorder
                         }
-                        borderDimColor={true}
                         borderTop={false}
                         borderLeft={false}
                         borderRight={false}

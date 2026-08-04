@@ -471,14 +471,14 @@ export function App({
             return;
         }
 
-        if (key.home) {
+        if ((key as Record<string, boolean>).home) {
             if (effectiveFocus === "content") {
                 setScrollOffset(0);
             }
             return;
         }
 
-        if (key.end) {
+        if ((key as Record<string, boolean>).end) {
             if (effectiveFocus === "content") {
                 setScrollOffset(null);
                 setHasNewOutput(false);

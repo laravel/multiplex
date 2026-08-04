@@ -4,22 +4,27 @@ const RESET_BG = "\x1b[49m";
 function parseSegments(raw) {
     const segments = [];
     const regex = /(\x1b\[[0-9;]*[A-Za-z])|([^\x1b\r]+)/g;
-    let match;
+    let match = null;
     while ((match = regex.exec(raw)) !== null) {
         if (match[1]) {
             segments.push({ text: match[1], isAnsi: true });
-        } else if (match[2]) {
+        }
+        else if (match[2]) {
             segments.push({ text: match[2], isAnsi: false });
         }
     }
     return segments;
 }
 export function highlightSearch(raw, query, activeMatchIdx) {
-    if (!query) return { result: raw, count: 0, linePositions: [] };
+    if (!query) {
+        return { result: raw, count: 0, linePositions: [] };
+    }
     const segments = parseSegments(raw);
     const plainParts = [];
     for (const seg of segments) {
-        if (!seg.isAnsi) plainParts.push(seg.text);
+        if (!seg.isAnsi) {
+            plainParts.push(seg.text);
+        }
     }
     const plainText = plainParts.join("");
     const lowerPlain = plainText.toLowerCase();
@@ -30,11 +35,16 @@ export function highlightSearch(raw, query, activeMatchIdx) {
         matches.push([pos, pos + query.length]);
         pos++;
     }
-    if (matches.length === 0)
+    if (matches.length === 0) {
         return { result: raw, count: 0, linePositions: [] };
+    }
     const linePositions = matches.map(([start]) => {
         let line = 0;
-        for (let i = 0; i < start; i++) if (plainText[i] === "\n") line++;
+        for (let i = 0; i < start; i++) {
+            if (plainText[i] === "\n") {
+                line++;
+            }
+        }
         return line;
     });
     const boundaries = new Set();
@@ -44,7 +54,9 @@ export function highlightSearch(raw, query, activeMatchIdx) {
     }
     function matchAt(p) {
         for (let i = 0; i < matches.length; i++) {
-            if (p >= matches[i][0] && p < matches[i][1]) return i;
+            if (p >= matches[i][0] && p < matches[i][1]) {
+                return i;
+            }
         }
         return -1;
     }
@@ -59,7 +71,9 @@ export function highlightSearch(raw, query, activeMatchIdx) {
         const splitPoints = [0];
         for (const b of boundaries) {
             const rel = b - plainPos;
-            if (rel > 0 && rel < textLen) splitPoints.push(rel);
+            if (rel > 0 && rel < textLen) {
+                splitPoints.push(rel);
+            }
         }
         splitPoints.push(textLen);
         splitPoints.sort((a, b) => a - b);
@@ -67,13 +81,16 @@ export function highlightSearch(raw, query, activeMatchIdx) {
         for (let s = 0; s < unique.length - 1; s++) {
             const start = unique[s];
             const end = unique[s + 1];
-            if (start === end) continue;
+            if (start === end) {
+                continue;
+            }
             const text = seg.text.slice(start, end);
             const mi = matchAt(plainPos + start);
             if (mi !== -1) {
                 const bg = mi === activeMatchIdx ? CURRENT_MATCH_BG : MATCH_BG;
                 result += bg + text + RESET_BG;
-            } else {
+            }
+            else {
                 result += text;
             }
         }

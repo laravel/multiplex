@@ -2,7 +2,9 @@
     "name": "@laravel/multiplex",
     "version": "1.0.0",
     "type": "module",
-    "bin": "dist/cli.js",
+    "bin": {
+        "multiplex": "dist/cli.js"
+    },
     "files": [
         "dist"
     ],

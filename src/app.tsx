@@ -21,6 +21,22 @@ const CONTENT_BORDER = 2;
 const CONTENT_PADDING = 1;
 const SCROLLBAR_WIDTH = 2;
 
+const KeyBindings = ({ bindings }: { bindings: [string, string][] }) => {
+    return (
+        <Text>
+            {bindings.map(([k, desc], i) => (
+                <Text key={i}>
+                    {i > 0 && <Text color="#555555"> </Text>}
+                    <Text color="#888888" bold>
+                        {k}
+                    </Text>
+                    <Text color="#555555"> {desc}</Text>
+                </Text>
+            ))}
+        </Text>
+    );
+};
+
 export function App({
     commandDefs,
     cwd,
@@ -357,6 +373,93 @@ export function App({
         };
     };
 
+    const resolveFooter = (): React.ReactNode => {
+        if (searchInputMode) {
+            return (
+                <Text>
+                    <Text color="#e5c07b" bold>
+                        /{" "}
+                    </Text>
+                    <Text color="#cccccc">{searchQuery}</Text>
+                    <Text color="#e5c07b">{"█"}</Text>
+                    {searchQuery && matchCount === 0 && (
+                        <Text color="#e06c75"> no matches</Text>
+                    )}
+                    {searchQuery && matchCount > 0 && (
+                        <Text color="#555555">
+                            {" "}
+                            {matchCount} match{matchCount === 1 ? "" : "es"}
+                        </Text>
+                    )}
+                </Text>
+            );
+        }
+
+        if (searchQuery && matchCount > 0) {
+            return (
+                <Text>
+                    <Text color="#e5c07b" bold>
+                        [{effectiveMatch + 1}/{matchCount}]
+                    </Text>
+                    <Text color="#888888"> {searchQuery}</Text>
+                    <Text color="#555555"> </Text>
+                    <KeyBindings
+                        bindings={[
+                            ["n", "next"],
+                            ["N", "prev"],
+                            ["Esc", "clear"],
+                        ]}
+                    />
+                </Text>
+            );
+        }
+
+        const bindings: [string, string][] = (() => {
+            if (streamMode) {
+                return [
+                    ["↑/↓", "scroll"],
+                    ["c", "clear"],
+                    ["/", "search"],
+                    ["t", "tabs"],
+                    ["q", "quit"],
+                ];
+            }
+
+            if (focus === "sidebar") {
+                return [
+                    ["↑/↓", "navigate"],
+                    ["tab", "logs"],
+                    ["r", "restart"],
+                    ["c", "clear"],
+                    ["/", "search"],
+                    ["t", "stream"],
+                    ["q", "quit"],
+                ];
+            }
+
+            if (focus === "content") {
+                return [
+                    ["↑/↓", "scroll"],
+                    ["tab", "tabs"],
+                    ["c", "clear"],
+                    ["/", "search"],
+                    ["t", "stream"],
+                    ["q", "quit"],
+                ];
+            }
+
+            return [];
+        })();
+
+        return (
+            <Box width="100%">
+                <KeyBindings bindings={bindings} />
+                <Box flexGrow={1} />
+                {hasNewOutput && <Text color="#e5c07b">↓ new output </Text>}
+            </Box>
+        );
+    };
+
     useInput((input, key) => {
         if (searchInputMode) {
             if (key.escape) {
@@ -621,97 +724,7 @@ export function App({
             ? ((currentMatch % matchCount) + matchCount) % matchCount
             : 0;
 
-    let footer: React.ReactNode;
-
-    if (searchInputMode) {
-        footer = (
-            <Text>
-                <Text color="#e5c07b" bold>
-                    /{" "}
-                </Text>
-                <Text color="#cccccc">{searchQuery}</Text>
-                <Text color="#e5c07b">{"█"}</Text>
-                {searchQuery && matchCount === 0 && (
-                    <Text color="#e06c75"> no matches</Text>
-                )}
-                {searchQuery && matchCount > 0 && (
-                    <Text color="#555555">
-                        {" "}
-                        {matchCount} match{matchCount === 1 ? "" : "es"}
-                    </Text>
-                )}
-            </Text>
-        );
-    } else if (searchQuery && matchCount > 0) {
-        footer = (
-            <Text>
-                <Text color="#e5c07b" bold>
-                    [{effectiveMatch + 1}/{matchCount}]
-                </Text>
-                <Text color="#888888"> {searchQuery}</Text>
-                <Text color="#555555"> </Text>
-                <Text color="#888888" bold>
-                    n
-                </Text>
-                <Text color="#555555"> next</Text>
-                <Text color="#555555"> </Text>
-                <Text color="#888888" bold>
-                    N
-                </Text>
-                <Text color="#555555"> prev</Text>
-                <Text color="#555555"> </Text>
-                <Text color="#888888" bold>
-                    Esc
-                </Text>
-                <Text color="#555555"> clear</Text>
-            </Text>
-        );
-    } else {
-        const bindings = streamMode
-            ? [
-                  ["↑/↓", "scroll"],
-                  ["c", "clear"],
-                  ["/", "search"],
-                  ["t", "tabs"],
-                  ["q", "quit"],
-              ]
-            : focus === "sidebar"
-              ? [
-                    ["↑/↓", "navigate"],
-                    ["tab", "logs"],
-                    ["r", "restart"],
-                    ["c", "clear"],
-                    ["/", "search"],
-                    ["t", "stream"],
-                    ["q", "quit"],
-                ]
-              : [
-                    ["↑/↓", "scroll"],
-                    ["tab", "tabs"],
-                    ["c", "clear"],
-                    ["/", "search"],
-                    ["t", "stream"],
-                    ["q", "quit"],
-                ];
-
-        footer = (
-            <Box width="100%">
-                <Text>
-                    {bindings.map(([k, desc], i) => (
-                        <Text key={i}>
-                            {i > 0 && <Text color="#555555"> </Text>}
-                            <Text color="#888888" bold>
-                                {k}
-                            </Text>
-                            <Text color="#555555"> {desc}</Text>
-                        </Text>
-                    ))}
-                </Text>
-                <Box flexGrow={1} />
-                {hasNewOutput && <Text color="#e5c07b">↓ new output </Text>}
-            </Box>
-        );
-    }
+    const Footer = resolveFooter();
 
     const totalLines = displayLines.length;
     const showScrollbar = totalLines > outputHeight;
@@ -761,7 +774,7 @@ export function App({
                 </Box>
                 <Box height={1} />
                 <Box height={1} paddingLeft={1}>
-                    {footer}
+                    {Footer}
                 </Box>
             </Box>
         );
@@ -859,7 +872,7 @@ export function App({
                 </Box>
             </Box>
             <Box height={1} paddingLeft={1}>
-                {footer}
+                {Footer}
             </Box>
         </Box>
     );

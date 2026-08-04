@@ -59,6 +59,8 @@ export function App({
     const [currentMatch, setCurrentMatch] = useState(0);
     const [, setRenderTick] = useState(0);
     const [focus, setFocus] = useState<"sidebar" | "content">("content");
+    const [filterMode, setFilterMode] = useState(false);
+    const [hiddenProcs, setHiddenProcs] = useState<Set<number>>(new Set());
 
     const outputHeight = streamMode ? rows - 2 : rows - 4;
 
@@ -193,6 +195,47 @@ export function App({
     };
 
     const resolveFooter = (): React.ReactNode => {
+        if (filterMode) {
+            return (
+                <Box width="100%">
+                    <Text color="#e5c07b" bold>
+                        filter:{" "}
+                    </Text>
+                    {commandDefs.map((cmd, i) => {
+                        const hidden = hiddenProcs.has(i);
+
+                        return (
+                            <Text key={i}>
+                                {i > 0 && <Text>{" ".repeat(3)}</Text>}
+                                <Text
+                                    color={hidden ? "#555555" : cmd.color}
+                                    strikethrough={hidden}
+                                    dimColor={hidden}
+                                    bold
+                                >
+                                    {i < 9 ? `${i + 1}` : " "}{" "}
+                                </Text>
+                                <Text
+                                    color={hidden ? "#555555" : cmd.color}
+                                    strikethrough={hidden}
+                                    dimColor
+                                >
+                                    {cmd.label}
+                                </Text>
+                            </Text>
+                        );
+                    })}
+                    <Box flexGrow={1} />
+                    <KeyBindings
+                        bindings={[
+                            ["1-9", "toggle"],
+                            ["f", "done"],
+                        ]}
+                    />
+                </Box>
+            );
+        }
+
         if (searchInputMode) {
             return (
                 <Text>
@@ -237,6 +280,7 @@ export function App({
             if (streamMode) {
                 return [
                     ["↑/↓", "scroll"],
+                    ["f", "filter"],
                     ["c", "clear"],
                     ["/", "search"],
                     ["t", "tabs"],
@@ -274,6 +318,9 @@ export function App({
             <Box width="100%">
                 <KeyBindings bindings={bindings} />
                 <Box flexGrow={1} />
+                {hiddenProcs.size > 0 && (
+                    <Text color="#e5c07b">◆ filtered </Text>
+                )}
                 {hasNewOutput && <Text color="#e5c07b">↓ new output </Text>}
             </Box>
         );
@@ -309,6 +356,39 @@ export function App({
             if (input && input.length === 1 && input.charCodeAt(0) >= 32) {
                 setSearchQuery((q) => q + input);
                 setCurrentMatch(0);
+
+                return;
+            }
+
+            return;
+        }
+
+        if (filterMode) {
+            if (key.escape || input === "f") {
+                setFilterMode(false);
+
+                return;
+            }
+
+            if (input && input >= "1" && input <= "9") {
+                const idx = parseInt(input, 10) - 1;
+
+                if (idx < commandDefs.length) {
+                    setHiddenProcs((prev) => {
+                        const next = new Set(prev);
+
+                        if (next.has(idx)) {
+                            next.delete(idx);
+                        } else {
+                            if (next.size < commandDefs.length - 1) {
+                                next.add(idx);
+                            }
+                        }
+
+                        return next;
+                    });
+                    resetScroll();
+                }
 
                 return;
             }
@@ -389,6 +469,12 @@ export function App({
             setStreamMode((m) => !m);
             setCurrentMatch(0);
             resetScroll();
+
+            return;
+        }
+
+        if (streamMode && input === "f") {
+            setFilterMode(true);
 
             return;
         }
@@ -480,14 +566,16 @@ export function App({
 
     const displayLines = !streamMode
         ? outputBuffersRef.current[selectedIndex].split("\n")
-        : streamLinesRef.current.map((sl) => {
-              const cmd = commandDefs[sl.cmdIndex];
-              const [r, g, b] = hexToRgb(cmd.color);
-              const padding = " ".repeat(maxLabelLen - cmd.label.length);
-              const ts = timestamps ? formatTimestamp(sl.time) : "";
+        : streamLinesRef.current
+              .filter((sl) => !hiddenProcs.has(sl.cmdIndex))
+              .map((sl) => {
+                  const cmd = commandDefs[sl.cmdIndex];
+                  const [r, g, b] = hexToRgb(cmd.color);
+                  const padding = " ".repeat(maxLabelLen - cmd.label.length);
+                  const ts = timestamps ? formatTimestamp(sl.time) : "";
 
-              return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
-          });
+                  return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
+              });
 
     const { visibleLines, matchCount } =
         getVisibleLinesAndMatchCount(displayLines);

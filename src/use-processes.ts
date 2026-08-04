@@ -17,6 +17,7 @@ type UseProcessesOptions = {
     bufferSize: number;
     streamBufferSize: number;
     timestamps: boolean;
+    autoRestart: boolean;
     stdout: NodeJS.WriteStream | undefined;
     triggerRender: () => void;
     outputRef?: OutputRef;
@@ -29,6 +30,7 @@ export function useProcesses({
     bufferSize,
     streamBufferSize,
     timestamps,
+    autoRestart,
     stdout,
     triggerRender,
     outputRef,
@@ -40,6 +42,11 @@ export function useProcesses({
     const partialsRef = useRef<string[]>(commandDefs.map(() => ""));
     const procsRef = useRef<ChildProcess[]>([]);
     const restartingRef = useRef<Set<number>>(new Set());
+    const autoRestartTimersRef = useRef<
+        Map<number, ReturnType<typeof setTimeout>>
+    >(new Map());
+    const autoRestartCountsRef = useRef<number[]>(commandDefs.map(() => 0));
+    const restartProcessRef = useRef<(i: number) => void>(() => {});
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
 
     if (outputRef) {
@@ -149,7 +156,9 @@ export function useProcesses({
                 }
 
                 const now = new Date();
-                const exitMsg = systemMsg(`Process exited with code ${exitCode}`);
+                const exitMsg = systemMsg(
+                    `Process exited with code ${exitCode}`,
+                );
                 const tsPrefix = timestamps ? formatTimestamp(now) : "";
 
                 outputBuffersRef.current[i] += `\n${tsPrefix}${exitMsg}`;
@@ -158,10 +167,6 @@ export function useProcesses({
                     text: exitMsg,
                     time: now,
                 });
-
-                if (exitCode !== 0 && exitCode !== null) {
-                    setFailedProcs((prev) => new Set(prev).add(i));
-                }
 
                 if (partialsRef.current[i].trim()) {
                     streamLinesRef.current.push({
@@ -172,16 +177,63 @@ export function useProcesses({
                     partialsRef.current[i] = "";
                 }
 
+                if (exitCode === 0 || exitCode === null) {
+                    autoRestartCountsRef.current[i] = 0;
+                } else {
+                    autoRestartCountsRef.current[i]++;
+
+                    if (autoRestart && autoRestartCountsRef.current[i] <= 5) {
+                        const attempt = autoRestartCountsRef.current[i];
+                        const restartMsg = systemMsg(
+                            `Restarting (${attempt}/5)...`,
+                        );
+                        const restartTsPrefix = timestamps
+                            ? formatTimestamp(now)
+                            : "";
+
+                        outputBuffersRef.current[i] +=
+                            `\n${restartTsPrefix}${restartMsg}`;
+                        streamLinesRef.current.push({
+                            cmdIndex: i,
+                            text: restartMsg,
+                            time: now,
+                        });
+
+                        const timer = setTimeout(() => {
+                            autoRestartTimersRef.current.delete(i);
+                            restartProcessRef.current(i);
+                        }, 1000);
+
+                        autoRestartTimersRef.current.set(i, timer);
+                    } else {
+                        setFailedProcs((prev) => new Set(prev).add(i));
+                    }
+                }
+
                 triggerRender();
             });
 
             return proc;
         },
-        [cwd, bufferSize, streamBufferSize, timestamps, triggerRender],
+        [
+            autoRestart,
+            cwd,
+            bufferSize,
+            streamBufferSize,
+            timestamps,
+            triggerRender,
+        ],
     );
 
     const restartProcess = useCallback(
         (i: number) => {
+            const pendingTimer = autoRestartTimersRef.current.get(i);
+            if (pendingTimer) {
+                clearTimeout(pendingTimer);
+                autoRestartTimersRef.current.delete(i);
+            }
+
+            autoRestartCountsRef.current[i] = 0;
             restartingRef.current.add(i);
 
             const proc = procsRef.current[i];
@@ -233,6 +285,8 @@ export function useProcesses({
         [commandDefs, spawnProcess, triggerRender],
     );
 
+    restartProcessRef.current = restartProcess;
+
     useEffect(() => {
         const procs = commandDefs.map((cmd, i) => spawnProcess(cmd, i));
 
@@ -243,6 +297,12 @@ export function useProcesses({
         }
 
         return () => {
+            for (const timer of autoRestartTimersRef.current.values()) {
+                clearTimeout(timer);
+            }
+
+            autoRestartTimersRef.current.clear();
+
             procs.forEach((proc) => {
                 try {
                     if (proc.pid) {

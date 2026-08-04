@@ -61,6 +61,7 @@ const program = new Command()
         "10000",
     )
     .option("--timestamps", "show timestamps in stream mode", false)
+    .option("--no-restart", "disable auto-restart on crash")
     .argument(
         "<commands...>",
         "commands as label,command or label,#color,command",
@@ -75,6 +76,7 @@ const opts = program.opts<{
     bufferSize: string;
     streamBufferSize: string;
     timestamps: boolean;
+    restart: boolean;
 }>();
 const commandDefs = program.processedArgs[0] as CommandDef[];
 
@@ -108,6 +110,7 @@ try {
             bufferSize={parseInt(opts.bufferSize, 10)}
             streamBufferSize={parseInt(opts.streamBufferSize, 10)}
             timestamps={opts.timestamps}
+            autoRestart={opts.restart}
             outputRef={outputRef}
             procsRef={procsRef}
         />,

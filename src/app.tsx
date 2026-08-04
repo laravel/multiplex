@@ -170,13 +170,11 @@ export function App({
                 partialsRef.current[i] = lines.pop() ?? "";
 
                 for (const line of lines) {
-                    if (line.trim()) {
-                        streamLinesRef.current.push({
-                            cmdIndex: i,
-                            text: line,
-                            time: new Date(),
-                        });
-                    }
+                    streamLinesRef.current.push({
+                        cmdIndex: i,
+                        text: line,
+                        time: new Date(),
+                    });
                 }
 
                 if (streamLinesRef.current.length > streamBufferSize * 1.5) {

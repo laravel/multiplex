@@ -68,7 +68,6 @@ multiplex --cwd /path/to/project 'server,php artisan serve'
 | `Left` / `Right` | Move focus to sidebar / content |
 | `Up` / `Down` | Navigate tabs (sidebar) or scroll (content) |
 | `Page Up` / `Page Down` | Scroll one page |
-| `Home` / `End` | Jump to top / bottom of output |
 
 ### Actions
 

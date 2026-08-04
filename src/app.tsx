@@ -67,7 +67,6 @@ export function App({
         scrollUp,
         pageDown,
         pageUp,
-        scrollToTop,
         scrollToBottom,
         resetScroll,
     } = useScroll(outputHeight);

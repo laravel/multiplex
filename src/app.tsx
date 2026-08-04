@@ -529,22 +529,18 @@ export function App({
     const sidebarWidth = SIDEBAR_WIDTH;
     const outputHeight = streamMode ? rows - 2 : rows - 4;
 
-    let displayLines: string[];
+    const displayLines = !streamMode
+        ? outputBuffersRef.current[selectedIndex].split("\n")
+        : streamLinesRef.current.map((sl) => {
+              const cmd = commandDefs[sl.cmdIndex];
+              const [r, g, b] = hexToRgb(cmd.color);
+              const padding = " ".repeat(maxLabelLen - cmd.label.length);
+              const ts = timestamps
+                  ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
+                  : "";
 
-    if (streamMode) {
-        displayLines = streamLinesRef.current.map((sl) => {
-            const cmd = commandDefs[sl.cmdIndex];
-            const [r, g, b] = hexToRgb(cmd.color);
-            const padding = " ".repeat(maxLabelLen - cmd.label.length);
-            const ts = timestamps
-                ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
-                : "";
-
-            return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
-        });
-    } else {
-        displayLines = outputBuffersRef.current[selectedIndex].split("\n");
-    }
+              return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
+          });
 
     let visibleLines: string[];
     let matchCount = 0;

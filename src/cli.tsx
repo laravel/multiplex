@@ -48,26 +48,78 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
     return [...previous, { label, color, command: cmdStr }];
 }
 
+const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
+const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
+
 const program = new Command()
     .name("multiplex")
-    .description("Run multiple commands in a tabbed TUI with searchable output")
-    .version("1.0.0")
-    .option("--cwd <path>", "working directory for commands", process.cwd())
-    .option("-s, --stream", "start in stream mode", false)
-    .option("--buffer-size <lines>", "max lines per command buffer", "2000")
+    .description("Run multiple commands in a tabbed TUI")
+    .version("1.0.0", "-V, --version", "Display the version number")
+    .option("--cwd <path>", "Set the working directory", process.cwd())
+    .option("-s, --stream", "Start in stream mode", false)
+    .option("--buffer-size <lines>", "Set the max lines per command buffer", "2000")
     .option(
         "--stream-buffer-size <lines>",
-        "max lines in stream buffer",
+        "Set the max lines in the stream buffer",
         "10000",
     )
-    .option("--timestamps", "show timestamps in stream mode", false)
-    .option("--no-restart", "disable auto-restart on crash")
+    .option("--timestamps", "Display timestamps on each output line", false)
+    .option("--no-restart", "Disable auto-restart on crash")
+    .helpOption("-h, --help", "Display help for the command")
     .argument(
         "<commands...>",
         "commands as label,command or label,#color,command",
         parseCommandDef,
         [] as CommandDef[],
     )
+    .configureHelp({
+        formatHelp(cmd, helper) {
+            const lines: string[] = [];
+
+            lines.push(yellow("Description:"));
+            lines.push(`  ${cmd.description()}`);
+            lines.push("");
+
+            lines.push(yellow("Usage:"));
+            lines.push(`  ${cmd.name()} [options] <commands...>`);
+            lines.push("");
+
+            lines.push(yellow("Arguments:"));
+            lines.push(
+                `  ${green("commands")}  The commands to run as ${green("label,command")} or ${green("label,#color,command")}`,
+            );
+            lines.push("");
+
+            lines.push(yellow("Options:"));
+
+            const opts = helper.visibleOptions(cmd);
+            const padWidth = Math.max(
+                ...opts.map((o) => helper.optionTerm(o).length),
+            );
+
+            for (const opt of opts) {
+                const term = helper.optionTerm(opt);
+                const pad = " ".repeat(padWidth - term.length);
+                let desc = opt.description;
+                const def = opt.defaultValue;
+
+                if (
+                    def !== undefined &&
+                    def !== false &&
+                    def !== true &&
+                    def !== process.cwd()
+                ) {
+                    desc += ` [default: ${JSON.stringify(def)}]`;
+                }
+
+                lines.push(`  ${green(term)}${pad}  ${desc}`);
+            }
+
+            lines.push("");
+
+            return lines.join("\n");
+        },
+    })
     .parse();
 
 const opts = program.opts<{

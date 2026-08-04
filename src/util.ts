@@ -14,7 +14,7 @@ const MAX_SIDEBAR_WIDTH = 40;
 
 export function sidebarWidth(labels: string[]): number {
     const maxLen = Math.max(...labels.map((l) => l.length));
-    return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, maxLen + 5));
+    return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, maxLen + 7));
 }
 
 export const TIMESTAMP_WIDTH = 9;

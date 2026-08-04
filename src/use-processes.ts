@@ -1,11 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
-
-export const SIDEBAR_WIDTH = 20;
-const CONTENT_BORDER = 2;
-const CONTENT_PADDING = 1;
-const SCROLLBAR_WIDTH = 2;
+import {
+    CONTENT_BORDER,
+    CONTENT_PADDING,
+    SCROLLBAR_WIDTH,
+    SIDEBAR_WIDTH,
+} from "./util.js";
 
 type UseProcessesOptions = {
     commandDefs: CommandDef[];

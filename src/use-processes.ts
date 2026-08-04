@@ -77,7 +77,7 @@ export function useProcesses({
         Map<number, ReturnType<typeof setTimeout>>
     >(new Map());
     const autoRestartCountsRef = useRef<number[]>(commandDefs.map(() => 0));
-    const restartProcessRef = useRef<(i: number) => void>(() => {});
+    const restartProcessRef = useRef<(i: number, manual?: boolean) => void>(() => {});
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
 
     if (outputRef) {
@@ -232,7 +232,7 @@ export function useProcesses({
 
                         const timer = setTimeout(() => {
                             autoRestartTimersRef.current.delete(i);
-                            restartProcessRef.current(i);
+                            restartProcessRef.current(i, false);
                         }, 1000);
 
                         autoRestartTimersRef.current.set(i, timer);
@@ -258,25 +258,27 @@ export function useProcesses({
     );
 
     const restartProcess = useCallback(
-        (i: number) => {
+        (i: number, manual = true) => {
             const pendingTimer = autoRestartTimersRef.current.get(i);
             if (pendingTimer) {
                 clearTimeout(pendingTimer);
                 autoRestartTimersRef.current.delete(i);
             }
 
-            autoRestartCountsRef.current[i] = 0;
-            restartingRef.current.add(i);
+            if (manual) {
+                autoRestartCountsRef.current[i] = 0;
+                restartingRef.current.add(i);
 
-            const proc = procsRef.current[i];
+                const proc = procsRef.current[i];
 
-            if (proc) {
-                try {
-                    if (proc.pid) {
-                        process.kill(-proc.pid, "SIGKILL");
+                if (proc) {
+                    try {
+                        if (proc.pid) {
+                            process.kill(-proc.pid, "SIGKILL");
+                        }
+                    } catch {
+                        //
                     }
-                } catch {
-                    //
                 }
             }
 

@@ -1,5 +1,5 @@
 {
-    "name": "artisan-dev-tui",
+    "name": "@laravel/multiplex",
     "version": "1.0.0",
     "type": "module",
     "bin": "dist/cli.js",
@@ -16,14 +16,14 @@
     },
     "dependencies": {
         "commander": "^15.0.0",
-        "ink": "^5.2.0",
+        "ink": "^5.2.1",
         "react": "^18.3.1"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.6",
         "@types/node": "^26.1.2",
-        "@types/react": "^18.3.0",
-        "tsx": "^4.23.1",
-        "typescript": "^5.8.0"
+        "@types/react": "^18.3.31",
+        "tsx": "^4.23.5",
+        "typescript": "^5.9.3"
     }
 }

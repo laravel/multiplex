@@ -292,6 +292,71 @@ export function App({
         };
     }, [commandDefs, spawnProcess]);
 
+    const getVisibleLinesAndMatchCount = (
+        lines: string[],
+    ): {
+        visibleLines: string[];
+        matchCount: number;
+    } => {
+        if (!searchQuery) {
+            matchCountRef.current = 0;
+            matchLinesRef.current = [];
+
+            return {
+                matchCount: 0,
+                visibleLines:
+                    scrollOffset === null
+                        ? lines.slice(-outputHeight)
+                        : lines.slice(
+                              scrollOffset,
+                              scrollOffset + outputHeight,
+                          ),
+            };
+        }
+
+        const fullContent = lines.join("\n");
+        const hl = highlightSearch(
+            fullContent,
+            searchQuery,
+            searchInputMode ? -1 : currentMatch,
+        );
+
+        const matchCount = hl.count;
+
+        matchCountRef.current = matchCount;
+        matchLinesRef.current = hl.linePositions;
+
+        const highlightedLines = hl.result.split("\n");
+
+        if (!searchInputMode && matchCount > 0 && hl.linePositions.length > 0) {
+            const effectiveMatch =
+                ((currentMatch % matchCount) + matchCount) % matchCount;
+            const targetLine = hl.linePositions[effectiveMatch] ?? 0;
+            const halfWindow = Math.floor(outputHeight / 2);
+            const maxStart = Math.max(
+                0,
+                highlightedLines.length - outputHeight,
+            );
+            const scrollStart = Math.max(
+                0,
+                Math.min(targetLine - halfWindow, maxStart),
+            );
+
+            return {
+                matchCount,
+                visibleLines: highlightedLines.slice(
+                    scrollStart,
+                    scrollStart + outputHeight,
+                ),
+            };
+        }
+
+        return {
+            matchCount,
+            visibleLines: highlightedLines.slice(-outputHeight),
+        };
+    };
+
     useInput((input, key) => {
         if (searchInputMode) {
             if (key.escape) {
@@ -542,58 +607,8 @@ export function App({
               return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
           });
 
-    let visibleLines: string[];
-    let matchCount = 0;
-
-    if (searchQuery) {
-        const fullContent = displayLines.join("\n");
-        const hl = highlightSearch(
-            fullContent,
-            searchQuery,
-            searchInputMode ? -1 : currentMatch,
-        );
-
-        matchCount = hl.count;
-
-        matchCountRef.current = matchCount;
-        matchLinesRef.current = hl.linePositions;
-
-        const highlightedLines = hl.result.split("\n");
-
-        if (!searchInputMode && matchCount > 0 && hl.linePositions.length > 0) {
-            const effectiveMatch =
-                ((currentMatch % matchCount) + matchCount) % matchCount;
-            const targetLine = hl.linePositions[effectiveMatch] ?? 0;
-            const halfWindow = Math.floor(outputHeight / 2);
-            const maxStart = Math.max(
-                0,
-                highlightedLines.length - outputHeight,
-            );
-            const scrollStart = Math.max(
-                0,
-                Math.min(targetLine - halfWindow, maxStart),
-            );
-
-            visibleLines = highlightedLines.slice(
-                scrollStart,
-                scrollStart + outputHeight,
-            );
-        } else {
-            visibleLines = highlightedLines.slice(-outputHeight);
-        }
-    } else {
-        matchCountRef.current = 0;
-        matchLinesRef.current = [];
-
-        if (scrollOffset !== null) {
-            visibleLines = displayLines.slice(
-                scrollOffset,
-                scrollOffset + outputHeight,
-            );
-        } else {
-            visibleLines = displayLines.slice(-outputHeight);
-        }
-    }
+    const { visibleLines, matchCount } =
+        getVisibleLinesAndMatchCount(displayLines);
 
     totalLinesRef.current = displayLines.length;
 

@@ -47,6 +47,7 @@ type UseProcessesOptions = {
     streamBufferSize: number;
     timestamps: boolean;
     autoRestart: boolean;
+    title?: string;
     stdout: NodeJS.WriteStream | undefined;
     triggerRender: () => void;
     outputRef?: OutputRef;
@@ -60,6 +61,7 @@ export function useProcesses({
     streamBufferSize,
     timestamps,
     autoRestart,
+    title,
     stdout,
     triggerRender,
     outputRef,
@@ -236,7 +238,7 @@ export function useProcesses({
                         autoRestartTimersRef.current.set(i, timer);
                     } else {
                         setFailedProcs((prev) => new Set(prev).add(i));
-                        notify("Multiplex", `${cmd.label} crashed (exit code ${exitCode})`);
+                        notify(title ?? "Multiplex", `${cmd.label} crashed (exit code ${exitCode})`);
                     }
                 }
 

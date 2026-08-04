@@ -65,6 +65,7 @@ const program = new Command()
     )
     .option("--timestamps", "Display timestamps on each output line", false)
     .option("--no-restart", "Disable auto-restart on crash")
+    .option("--title <name>", "Set the terminal tab title")
     .helpOption("-h, --help", "Display help for the command")
     .argument(
         "<commands...>",
@@ -129,8 +130,13 @@ const opts = program.opts<{
     streamBufferSize: string;
     timestamps: boolean;
     restart: boolean;
+    title?: string;
 }>();
 const commandDefs = program.processedArgs[0] as CommandDef[];
+
+if (opts.title) {
+    process.stdout.write(`\x1b]0;${opts.title}\x07`);
+}
 
 process.stdout.write("\x1b[?1049h\x1b[?25l");
 process.on("exit", () => {
@@ -163,6 +169,7 @@ try {
             streamBufferSize={parseInt(opts.streamBufferSize, 10)}
             timestamps={opts.timestamps}
             autoRestart={opts.restart}
+            title={opts.title}
             outputRef={outputRef}
             procsRef={procsRef}
         />,

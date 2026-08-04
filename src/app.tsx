@@ -14,6 +14,7 @@ type AppProps = {
     streamBufferSize?: number;
     timestamps?: boolean;
     autoRestart?: boolean;
+    title?: string;
     outputRef?: OutputRef;
     procsRef?: ProcsRef;
 };
@@ -42,6 +43,7 @@ export function App({
     streamBufferSize = 10_000,
     timestamps = false,
     autoRestart = true,
+    title,
     outputRef,
     procsRef: externalProcsRef,
 }: AppProps) {
@@ -105,6 +107,7 @@ export function App({
         streamBufferSize,
         timestamps,
         autoRestart,
+        title,
         stdout,
         triggerRender,
         outputRef,

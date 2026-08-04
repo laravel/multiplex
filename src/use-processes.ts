@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
 
-const SIDEBAR_WIDTH = 20;
+export const SIDEBAR_WIDTH = 20;
 const CONTENT_BORDER = 2;
 const CONTENT_PADDING = 1;
 const SCROLLBAR_WIDTH = 2;

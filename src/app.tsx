@@ -2,7 +2,7 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
-import { useProcesses } from "./use-processes.js";
+import { SIDEBAR_WIDTH, useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import { hexToRgb } from "./util.js";
 
@@ -16,8 +16,6 @@ type AppProps = {
     outputRef?: OutputRef;
     procsRef?: ProcsRef;
 };
-
-const SIDEBAR_WIDTH = 20;
 
 const KeyBindings = ({ bindings }: { bindings: [string, string][] }) => {
     return (

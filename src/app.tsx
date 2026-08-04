@@ -1,5 +1,5 @@
-import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { type ChildProcess, spawn } from "node:child_process";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";

@@ -43,13 +43,7 @@ export function useProcesses({
 
     const spawnProcess = useCallback(
         (cmd: CommandDef, i: number) => {
-            const cmdStr = cmd.command.join(" ");
-            const needsShell = /[&|;<>()]/.test(cmdStr);
-            const spawnArgs: [string, string[]] = needsShell
-                ? ["sh", ["-c", cmdStr]]
-                : [cmd.command[0], cmd.command.slice(1)];
-
-            const proc = spawn(spawnArgs[0], spawnArgs[1], {
+            const proc = spawn("sh", ["-c", cmd.command], {
                 cwd,
                 detached: true,
                 env: {

@@ -42,7 +42,7 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
         cmdStr = parts.slice(1).join(",");
     }
 
-    return [...previous, { label, color, command: cmdStr.split(" ") }];
+    return [...previous, { label, color, command: cmdStr }];
 }
 
 const program = new Command()

@@ -634,7 +634,7 @@ export function App({
                         paddingX={1}
                     >
                         <Text color="#888888">
-                            {commandDefs[selectedIndex].command.join(" ")}
+                            {commandDefs[selectedIndex].command}
                         </Text>
                     </Box>
                     <Box paddingLeft={1} flexDirection="column" flexGrow={1}>

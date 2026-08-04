@@ -3,7 +3,7 @@ import type { ChildProcess } from "node:child_process";
 export type CommandDef = {
     label: string;
     color: string;
-    command: string[];
+    command: string;
 };
 
 export type StreamLine = {

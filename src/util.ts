@@ -4,6 +4,9 @@ export const hexToRgb = (hex: string): [number, number, number] => [
     parseInt(hex.slice(5, 7), 16),
 ];
 
+export const systemMsg = (text: string) =>
+    `\x1b[2m\x1b[3m${text}\x1b[0m`;
+
 export const SIDEBAR_WIDTH = 20;
 export const CONTENT_BORDER = 2;
 export const CONTENT_PADDING = 1;

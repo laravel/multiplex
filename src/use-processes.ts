@@ -6,6 +6,7 @@ import {
     CONTENT_PADDING,
     SCROLLBAR_WIDTH,
     SIDEBAR_WIDTH,
+    systemMsg,
 } from "./util.js";
 
 type UseProcessesOptions = {
@@ -111,7 +112,7 @@ export function useProcesses({
             proc.stderr?.on("data", handleData);
 
             proc.on("error", (err) => {
-                const errorMsg = `[Failed to start: ${err.message}]`;
+                const errorMsg = systemMsg(`Failed to start: ${err.message}`);
 
                 outputBuffersRef.current[i] += `\n${errorMsg}`;
                 streamLinesRef.current.push({
@@ -131,7 +132,7 @@ export function useProcesses({
                     return;
                 }
 
-                const exitMsg = `[Process exited with code ${exitCode}]`;
+                const exitMsg = systemMsg(`Process exited with code ${exitCode}`);
 
                 outputBuffersRef.current[i] += `\n${exitMsg}`;
                 streamLinesRef.current.push({
@@ -177,9 +178,17 @@ export function useProcesses({
                 }
             }
 
-            outputBuffersRef.current[i] = "";
-            outputLineCountsRef.current[i] = 1;
+            const restartMsg = systemMsg(`Restarted at ${new Date().toLocaleTimeString("en-GB")}`);
+
+            outputBuffersRef.current[i] = `${restartMsg}\n`;
+            outputLineCountsRef.current[i] = 2;
             partialsRef.current[i] = "";
+
+            streamLinesRef.current.push({
+                cmdIndex: i,
+                text: restartMsg,
+                time: new Date(),
+            });
 
             setFailedProcs((prev) => {
                 const next = new Set(prev);
@@ -224,10 +233,21 @@ export function useProcesses({
         };
     }, [commandDefs, spawnProcess]);
 
-    const clearOutput = useCallback((index: number) => {
-        outputBuffersRef.current[index] = "";
-        outputLineCountsRef.current[index] = 1;
-    }, []);
+    const clearOutput = useCallback(
+        (index: number) => {
+            const clearMsg = systemMsg(`Cleared at ${new Date().toLocaleTimeString("en-GB")}`);
+
+            outputBuffersRef.current[index] = clearMsg;
+            outputLineCountsRef.current[index] = 1;
+
+            streamLinesRef.current.push({
+                cmdIndex: index,
+                text: clearMsg,
+                time: new Date(),
+            });
+        },
+        [commandDefs],
+    );
 
     const clearStream = useCallback(() => {
         streamLinesRef.current.length = 0;

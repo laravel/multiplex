@@ -6,6 +6,9 @@ import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import { formatTimestamp, hexToRgb, sidebarWidth } from "./util.js";
 
+const SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+const SPAWN_SPINNER_MS = 2000;
+
 type AppProps = {
     commandDefs: CommandDef[];
     cwd: string;
@@ -102,6 +105,8 @@ export function App({
         restartProcess,
         clearOutput,
         clearStream,
+        spawnTimeRef,
+        pendingRestartsRef,
     } = useProcesses({
         commandDefs,
         cwd,
@@ -116,6 +121,8 @@ export function App({
         externalProcsRef,
     });
 
+    const [animFrame, setAnimFrame] = useState(0);
+
     useEffect(() => {
         const handleResize = () => {
             setRows(stdout?.rows ?? 24);
@@ -128,6 +135,28 @@ export function App({
             stdout?.off("resize", handleResize);
         };
     }, [stdout]);
+
+    useEffect(() => {
+        const state = { active: false };
+        const id = setInterval(() => {
+            const now = Date.now();
+            const anySpinning = spawnTimeRef.current.some(
+                (t) => t > 0 && now - t < SPAWN_SPINNER_MS,
+            );
+            const isAnimating =
+                anySpinning || pendingRestartsRef.current.size > 0;
+
+            if (isAnimating) {
+                state.active = true;
+                setAnimFrame((f) => f + 1);
+            } else if (state.active) {
+                state.active = false;
+                setAnimFrame((f) => f + 1);
+            }
+        }, 80);
+
+        return () => clearInterval(id);
+    }, []);
 
     const getVisibleLinesAndMatchCount = (
         lines: string[],
@@ -561,6 +590,7 @@ export function App({
         }
     });
 
+    const renderNow = Date.now();
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
     const computedSidebarWidth = sidebarWidth(commandDefs.map((c) => c.label));
 
@@ -664,12 +694,33 @@ export function App({
                     {commandDefs.map((cmd, i) => {
                         const selected = i === selectedIndex;
                         const failed = failedProcs.has(i);
+                        const isRestarting = pendingRestartsRef.current.has(i);
+                        const isSpinning =
+                            renderNow - spawnTimeRef.current[i] <
+                            SPAWN_SPINNER_MS;
                         const innerWidth = computedSidebarWidth - 2;
-                        const indicator = failed
-                            ? "✕"
-                            : i < 9
-                              ? `${i + 1}`
-                              : " ";
+                        const spinnerChar =
+                            SPINNER_FRAMES[animFrame % SPINNER_FRAMES.length];
+
+                        let indicator: string;
+                        let indicatorColor: string;
+                        let dim = false;
+
+                        if (isRestarting) {
+                            indicator = spinnerChar;
+                            indicatorColor = selected ? "#000000" : "#e5c07b";
+                        } else if (failed) {
+                            indicator = "✕";
+                            indicatorColor = "#ef4444";
+                        } else if (isSpinning) {
+                            indicator = spinnerChar;
+                            indicatorColor = selected ? "#000000" : cmd.color;
+                        } else {
+                            indicator = i < 9 ? `${i + 1}` : " ";
+                            indicatorColor = selected ? "#000000" : "#555555";
+                            dim = !selected;
+                        }
+
                         const pad = Math.max(
                             0,
                             innerWidth - 3 - cmd.label.length,
@@ -679,14 +730,8 @@ export function App({
                             <Box key={i}>
                                 <Text
                                     backgroundColor={bg}
-                                    color={
-                                        failed
-                                            ? "#ef4444"
-                                            : selected
-                                              ? "#000000"
-                                              : "#555555"
-                                    }
-                                    dimColor={!failed && !selected}
+                                    color={indicatorColor}
+                                    dimColor={dim}
                                 >
                                     {" "}
                                     {indicator}{" "}

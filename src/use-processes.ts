@@ -4,11 +4,11 @@ import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
 import {
     CONTENT_BORDER,
     CONTENT_PADDING,
-    SCROLLBAR_WIDTH,
-    TIMESTAMP_WIDTH,
     formatTimestamp,
+    SCROLLBAR_WIDTH,
     sidebarWidth,
     systemMsg,
+    TIMESTAMP_WIDTH,
 } from "./util.js";
 
 const hasNotifySend =
@@ -29,10 +29,14 @@ function escapeAppleScript(s: string): string {
 function notify(title: string, message: string) {
     try {
         if (process.platform === "darwin") {
-            spawn("osascript", [
-                "-e",
-                `display notification "${escapeAppleScript(message)}" with title "${escapeAppleScript(title)}"`,
-            ], { stdio: "ignore", detached: true }).unref();
+            spawn(
+                "osascript",
+                [
+                    "-e",
+                    `display notification "${escapeAppleScript(message)}" with title "${escapeAppleScript(title)}"`,
+                ],
+                { stdio: "ignore", detached: true },
+            ).unref();
         } else if (hasNotifySend) {
             spawn("notify-send", [title, message], {
                 stdio: "ignore",
@@ -77,11 +81,15 @@ export function useProcesses({
     const partialsRef = useRef<string[]>(commandDefs.map(() => ""));
     const procsRef = useRef<ChildProcess[]>([]);
     const restartingRef = useRef<Set<number>>(new Set());
+    const spawnTimeRef = useRef<number[]>(commandDefs.map(() => 0));
+    const pendingRestartsRef = useRef<Set<number>>(new Set());
     const autoRestartTimersRef = useRef<
         Map<number, ReturnType<typeof setTimeout>>
     >(new Map());
     const autoRestartCountsRef = useRef<number[]>(commandDefs.map(() => 0));
-    const restartProcessRef = useRef<(i: number, manual?: boolean) => void>(() => {});
+    const restartProcessRef = useRef<(i: number, manual?: boolean) => void>(
+        () => {},
+    );
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
 
     if (outputRef) {
@@ -90,6 +98,8 @@ export function useProcesses({
 
     const spawnProcess = useCallback(
         (cmd: CommandDef, i: number) => {
+            spawnTimeRef.current[i] = Date.now();
+
             const proc = spawn("sh", ["-c", cmd.command], {
                 cwd,
                 detached: true,
@@ -234,15 +244,21 @@ export function useProcesses({
                             time: now,
                         });
 
+                        pendingRestartsRef.current.add(i);
+
                         const timer = setTimeout(() => {
                             autoRestartTimersRef.current.delete(i);
+                            pendingRestartsRef.current.delete(i);
                             restartProcessRef.current(i, false);
                         }, 1000);
 
                         autoRestartTimersRef.current.set(i, timer);
                     } else {
                         setFailedProcs((prev) => new Set(prev).add(i));
-                        notify(title ?? "Multiplex", `${cmd.label} crashed (exit code ${exitCode})`);
+                        notify(
+                            title ?? "Multiplex",
+                            `${cmd.label} crashed (exit code ${exitCode})`,
+                        );
                     }
                 }
 
@@ -267,6 +283,7 @@ export function useProcesses({
             if (pendingTimer) {
                 clearTimeout(pendingTimer);
                 autoRestartTimersRef.current.delete(i);
+                pendingRestartsRef.current.delete(i);
             }
 
             if (manual) {
@@ -384,5 +401,7 @@ export function useProcesses({
         restartProcess,
         clearOutput,
         clearStream,
+        spawnTimeRef,
+        pendingRestartsRef,
     };
 }

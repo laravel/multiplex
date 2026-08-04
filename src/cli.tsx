@@ -78,7 +78,12 @@ const program = new Command()
     .version("1.0.0", "-V, --version", "Display the version number")
     .option("--cwd <path>", "Set the working directory", process.cwd())
     .option("-s, --stream", "Start in stream mode", false)
-    .option("--buffer-size <lines>", "Set the max lines per command buffer", parsePositiveInt, 2000)
+    .option(
+        "--buffer-size <lines>",
+        "Set the max lines per command buffer",
+        parsePositiveInt,
+        2000,
+    )
     .option(
         "--stream-buffer-size <lines>",
         "Set the max lines in the stream buffer",

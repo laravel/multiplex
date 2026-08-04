@@ -54,7 +54,7 @@ export function App({
     const [searchQuery, setSearchQuery] = useState("");
     const [currentMatch, setCurrentMatch] = useState(0);
     const [, setRenderTick] = useState(0);
-    const [focus, setFocus] = useState<"sidebar" | "content">("sidebar");
+    const [focus, setFocus] = useState<"sidebar" | "content">("content");
 
     const outputHeight = streamMode ? rows - 2 : rows - 4;
 

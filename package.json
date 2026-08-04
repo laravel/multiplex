@@ -37,6 +37,7 @@
     "scripts": {
         "dev": "tsx src/cli.tsx",
         "build": "tsc",
+        "test": "tsx --test src/*.test.ts",
         "check": "biome check --write",
         "lint": "biome lint",
         "format": "biome format --write",

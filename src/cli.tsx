@@ -59,6 +59,16 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
     return [...previous, { label, color, command: cmdStr }];
 }
 
+function parsePositiveInt(value: string): number {
+    const n = parseInt(value, 10);
+
+    if (Number.isNaN(n) || n <= 0) {
+        throw new Error(`"${value}" is not a positive integer.`);
+    }
+
+    return n;
+}
+
 const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 
@@ -68,11 +78,12 @@ const program = new Command()
     .version("1.0.0", "-V, --version", "Display the version number")
     .option("--cwd <path>", "Set the working directory", process.cwd())
     .option("-s, --stream", "Start in stream mode", false)
-    .option("--buffer-size <lines>", "Set the max lines per command buffer", "2000")
+    .option("--buffer-size <lines>", "Set the max lines per command buffer", parsePositiveInt, 2000)
     .option(
         "--stream-buffer-size <lines>",
         "Set the max lines in the stream buffer",
-        "10000",
+        parsePositiveInt,
+        10000,
     )
     .option("--timestamps", "Display timestamps on each output line", false)
     .option("--no-restart", "Disable auto-restart on crash")
@@ -137,8 +148,8 @@ const program = new Command()
 const opts = program.opts<{
     cwd: string;
     stream: boolean;
-    bufferSize: string;
-    streamBufferSize: string;
+    bufferSize: number;
+    streamBufferSize: number;
     timestamps: boolean;
     restart: boolean;
     title?: string;
@@ -176,8 +187,8 @@ try {
             commandDefs={commandDefs}
             cwd={opts.cwd}
             initialStreamMode={opts.stream}
-            bufferSize={parseInt(opts.bufferSize, 10)}
-            streamBufferSize={parseInt(opts.streamBufferSize, 10)}
+            bufferSize={opts.bufferSize}
+            streamBufferSize={opts.streamBufferSize}
             timestamps={opts.timestamps}
             autoRestart={opts.restart}
             title={opts.title}

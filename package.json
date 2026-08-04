@@ -1,7 +1,28 @@
 {
     "name": "@laravel/multiplex",
     "version": "1.0.0",
+    "description": "A tabbed TUI for running multiple commands simultaneously with searchable, scrollable output",
+    "keywords": [
+        "tui",
+        "terminal",
+        "cli",
+        "multiplexer",
+        "process-manager",
+        "ink",
+        "laravel"
+    ],
+    "homepage": "https://github.com/laravel/multiplex/tree/main/packages/vue#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/laravel/multiplex.git"
+    },
+    "bugs": {
+        "url": "https://github.com/laravel/multiplex/issues"
+    },
     "license": "MIT",
+    "author": {
+        "name": "Taylor Otwell"
+    },
     "packageManager": "pnpm@11.10.0",
     "engines": {
         "node": ">=18"

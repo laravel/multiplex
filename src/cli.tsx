@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import type { ChildProcess } from "node:child_process";
 import { Command } from "commander";
 import { render } from "ink";
-import { App, type CommandDef, hexToRgb, type StreamLine } from "./app.js";
+import { App } from "./app.js";
+import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
+import { hexToRgb } from "./util.js";
 
 const DEFAULT_COLORS = [
     "#93c5fd",
@@ -23,6 +24,7 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
     }
 
     const label = parts[0];
+
     let color: string;
     let cmdStr: string;
 
@@ -79,8 +81,8 @@ process.on("exit", () => {
     process.stdout.write("\x1b[?25h\x1b[?1049l");
 });
 
-const outputRef: { current: StreamLine[] } = { current: [] };
-const procsRef: { current: ChildProcess[] } = { current: [] };
+const outputRef: OutputRef = { current: [] };
+const procsRef: ProcsRef = { current: [] };
 
 function killAll() {
     for (const proc of procsRef.current) {
@@ -88,7 +90,9 @@ function killAll() {
             if (proc.pid) {
                 process.kill(-proc.pid, "SIGKILL");
             }
-        } catch {}
+        } catch {
+            //
+        }
     }
 }
 
@@ -106,6 +110,7 @@ try {
         />,
         { exitOnCtrlC: true },
     );
+
     await waitUntilExit();
 } catch {
     process.exit(1);
@@ -117,6 +122,7 @@ process.stdout.write("\x1b[?25h\x1b[?1049l");
 
 if (outputRef.current.length > 0) {
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
+
     for (const sl of outputRef.current) {
         const cmd = commandDefs[sl.cmdIndex];
         const [r, g, b] = hexToRgb(cmd.color);
@@ -124,6 +130,7 @@ if (outputRef.current.length > 0) {
         const ts = opts.timestamps
             ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
             : "";
+
         process.stdout.write(
             `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
         );

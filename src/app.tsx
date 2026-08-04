@@ -1,43 +1,25 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { type ChildProcess, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
+import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
+import { hexToRgb } from "./util.js";
 
-export interface CommandDef {
-    label: string;
-    color: string;
-    command: string[];
-}
-
-export interface StreamLine {
-    cmdIndex: number;
-    text: string;
-    time: Date;
-}
-
-interface AppProps {
+type AppProps = {
     commandDefs: CommandDef[];
     cwd: string;
     initialStreamMode: boolean;
     bufferSize?: number;
     streamBufferSize?: number;
     timestamps?: boolean;
-    outputRef?: { current: StreamLine[] };
-    procsRef?: { current: ChildProcess[] };
-}
+    outputRef?: OutputRef;
+    procsRef?: ProcsRef;
+};
 
 const SIDEBAR_WIDTH = 20;
 const CONTENT_BORDER = 2;
 const CONTENT_PADDING = 1;
 const SCROLLBAR_WIDTH = 2;
-
-export function hexToRgb(hex: string): [number, number, number] {
-    return [
-        parseInt(hex.slice(1, 3), 16),
-        parseInt(hex.slice(3, 5), 16),
-        parseInt(hex.slice(5, 7), 16),
-    ];
-}
 
 export function App({
     commandDefs,
@@ -87,8 +69,10 @@ export function App({
         if (scrollOffsetRef.current !== null) {
             setHasNewOutput(true);
         }
+
         if (!pendingRender.current) {
             pendingRender.current = true;
+
             setTimeout(() => {
                 pendingRender.current = false;
                 setRenderTick((t) => t + 1);
@@ -101,7 +85,9 @@ export function App({
             setRows(stdout?.rows ?? 24);
             setCols(stdout?.columns ?? 80);
         };
+
         stdout?.on("resize", handleResize);
+
         return () => {
             stdout?.off("resize", handleResize);
         };
@@ -140,14 +126,17 @@ export function App({
 
             const handleData = (data: Buffer) => {
                 const text = data.toString().replace(/\r/g, "");
+
                 outputBuffersRef.current[i] += text;
 
                 let newLines = 0;
+
                 for (let c = 0; c < text.length; c++) {
                     if (text[c] === "\n") {
                         newLines++;
                     }
                 }
+
                 outputLineCountsRef.current[i] += newLines;
 
                 if (outputLineCountsRef.current[i] > bufferSize * 1.5) {
@@ -159,8 +148,11 @@ export function App({
                 }
 
                 partialsRef.current[i] += text;
+
                 const lines = partialsRef.current[i].split("\n");
+
                 partialsRef.current[i] = lines.pop() ?? "";
+
                 for (const line of lines) {
                     if (line.trim()) {
                         streamLinesRef.current.push({
@@ -186,12 +178,14 @@ export function App({
 
             proc.on("error", (err) => {
                 const errorMsg = `[Failed to start: ${err.message}]`;
+
                 outputBuffersRef.current[i] += `\n${errorMsg}`;
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: errorMsg,
                     time: new Date(),
                 });
+
                 setFailedProcs((prev) => new Set(prev).add(i));
                 triggerRender();
             });
@@ -199,10 +193,12 @@ export function App({
             proc.on("exit", (exitCode) => {
                 if (restartingRef.current.has(i)) {
                     restartingRef.current.delete(i);
+
                     return;
                 }
 
                 const exitMsg = `[Process exited with code ${exitCode}]`;
+
                 outputBuffersRef.current[i] += `\n${exitMsg}`;
                 streamLinesRef.current.push({
                     cmdIndex: i,
@@ -234,27 +230,37 @@ export function App({
     const restartProcess = useCallback(
         (i: number) => {
             restartingRef.current.add(i);
+
             const proc = procsRef.current[i];
+
             if (proc) {
                 try {
                     if (proc.pid) {
                         process.kill(-proc.pid, "SIGKILL");
                     }
-                } catch {}
+                } catch {
+                    //
+                }
             }
 
             outputBuffersRef.current[i] = "";
             outputLineCountsRef.current[i] = 1;
             partialsRef.current[i] = "";
+
             setFailedProcs((prev) => {
                 const next = new Set(prev);
+
                 next.delete(i);
+
                 return next;
             });
+
             setScrollOffset(null);
 
             const newProc = spawnProcess(commandDefs[i], i);
+
             procsRef.current[i] = newProc;
+
             if (externalProcsRef) {
                 externalProcsRef.current[i] = newProc;
             }
@@ -268,6 +274,7 @@ export function App({
         const procs = commandDefs.map((cmd, i) => spawnProcess(cmd, i));
 
         procsRef.current = procs;
+
         if (externalProcsRef) {
             externalProcsRef.current = procs;
         }
@@ -278,7 +285,9 @@ export function App({
                     if (proc.pid) {
                         process.kill(-proc.pid, "SIGKILL");
                     }
-                } catch {}
+                } catch {
+                    //
+                }
             });
         };
     }, [commandDefs, spawnProcess]);
@@ -289,25 +298,34 @@ export function App({
                 setSearchInputMode(false);
                 setSearchQuery("");
                 setCurrentMatch(0);
+
                 return;
             }
+
             if (key.return) {
                 setSearchInputMode(false);
+
                 if (matchCountRef.current > 0) {
                     setCurrentMatch(0);
                 }
+
                 return;
             }
+
             if (key.backspace || key.delete) {
                 setSearchQuery((q) => q.slice(0, -1));
                 setCurrentMatch(0);
+
                 return;
             }
+
             if (input && input.length === 1 && input.charCodeAt(0) >= 32) {
                 setSearchQuery((q) => q + input);
                 setCurrentMatch(0);
+
                 return;
             }
+
             return;
         }
 
@@ -315,6 +333,7 @@ export function App({
             setSearchInputMode(true);
             setSearchQuery("");
             setCurrentMatch(0);
+
             return;
         }
 
@@ -322,33 +341,41 @@ export function App({
             setSearchQuery("");
             setCurrentMatch(0);
             setScrollOffset(null);
+
             return;
         }
 
         if (searchQuery) {
             if (input === "n") {
                 const mc = matchCountRef.current;
+
                 if (mc > 0) {
                     setCurrentMatch((m) => (m + 1) % mc);
                 }
+
                 return;
             }
+
             if (input === "N") {
                 const mc = matchCountRef.current;
+
                 if (mc > 0) {
                     setCurrentMatch((m) => (m - 1 + mc) % mc);
                 }
+
                 return;
             }
         }
 
         if (input === "q") {
             exit();
+
             return;
         }
 
         if (input === "r" && !streamMode) {
             restartProcess(selectedIndex);
+
             return;
         }
 
@@ -359,19 +386,23 @@ export function App({
                 outputBuffersRef.current[selectedIndex] = "";
                 outputLineCountsRef.current[selectedIndex] = 1;
             }
+
             setScrollOffset(null);
             triggerRender();
+
             return;
         }
 
         if (input && input >= "1" && input <= "9") {
             const idx = parseInt(input, 10) - 1;
+
             if (idx < commandDefs.length) {
                 setSelectedIndex(idx);
                 setCurrentMatch(0);
                 setScrollOffset(null);
                 setHasNewOutput(false);
             }
+
             return;
         }
 
@@ -385,16 +416,19 @@ export function App({
 
         if (!streamMode && key.tab) {
             setFocus((f) => (f === "sidebar" ? "content" : "sidebar"));
+
             return;
         }
 
         if (!streamMode && key.leftArrow) {
             setFocus("sidebar");
+
             return;
         }
 
         if (!streamMode && key.rightArrow) {
             setFocus("content");
+
             return;
         }
 
@@ -446,13 +480,16 @@ export function App({
         if (key.pageDown) {
             if (effectiveFocus === "content") {
                 const oh = streamMode ? rows - 2 : rows - 4;
+
                 setScrollOffset((prev) => {
                     if (prev === null) {
                         return null;
                     }
+
                     const total = totalLinesRef.current;
                     const maxOffset = Math.max(0, total - oh);
                     const newOffset = prev + oh;
+
                     return newOffset >= maxOffset ? null : newOffset;
                 });
             }
@@ -462,12 +499,14 @@ export function App({
         if (key.pageUp) {
             if (effectiveFocus === "content") {
                 const oh = streamMode ? rows - 2 : rows - 4;
+
                 setScrollOffset((prev) => {
                     const total = totalLinesRef.current;
                     const currentStart = prev ?? Math.max(0, total - oh);
                     return Math.max(0, currentStart - oh);
                 });
             }
+
             return;
         }
 
@@ -475,6 +514,7 @@ export function App({
             if (effectiveFocus === "content") {
                 setScrollOffset(0);
             }
+
             return;
         }
 
@@ -483,6 +523,7 @@ export function App({
                 setScrollOffset(null);
                 setHasNewOutput(false);
             }
+
             return;
         }
     });
@@ -501,6 +542,7 @@ export function App({
             const ts = timestamps
                 ? `\x1b[90m${sl.time.toLocaleTimeString("en-GB")} \x1b[0m`
                 : "";
+
             return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
         });
     } else {
@@ -517,7 +559,9 @@ export function App({
             searchQuery,
             searchInputMode ? -1 : currentMatch,
         );
+
         matchCount = hl.count;
+
         matchCountRef.current = matchCount;
         matchLinesRef.current = hl.linePositions;
 
@@ -536,6 +580,7 @@ export function App({
                 0,
                 Math.min(targetLine - halfWindow, maxStart),
             );
+
             visibleLines = highlightedLines.slice(
                 scrollStart,
                 scrollStart + outputHeight,
@@ -662,6 +707,7 @@ export function App({
 
     const totalLines = displayLines.length;
     const showScrollbar = totalLines > outputHeight;
+
     let thumbStart = 0;
     let thumbEnd = 0;
 
@@ -673,9 +719,11 @@ export function App({
             1,
             Math.round((outputHeight / totalLines) * outputHeight),
         );
+
         thumbStart = Math.round(
             (currentOffset / maxOffset) * (outputHeight - thumbSize),
         );
+
         thumbEnd = thumbStart + thumbSize;
     }
 

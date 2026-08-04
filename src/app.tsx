@@ -337,15 +337,15 @@ export function App({
             return;
         }
 
-        if (key.escape && searchQuery) {
-            setSearchQuery("");
-            setCurrentMatch(0);
-            setScrollOffset(null);
-
-            return;
-        }
-
         if (searchQuery) {
+            if (key.escape) {
+                setSearchQuery("");
+                setCurrentMatch(0);
+                setScrollOffset(null);
+
+                return;
+            }
+
             if (input === "n") {
                 const mc = matchCountRef.current;
 
@@ -369,12 +369,6 @@ export function App({
 
         if (input === "q") {
             exit();
-
-            return;
-        }
-
-        if (input === "r" && !streamMode) {
-            restartProcess(selectedIndex);
 
             return;
         }
@@ -414,22 +408,30 @@ export function App({
             return;
         }
 
-        if (!streamMode && key.tab) {
-            setFocus((f) => (f === "sidebar" ? "content" : "sidebar"));
+        if (!streamMode) {
+            if (input === "r") {
+                restartProcess(selectedIndex);
 
-            return;
-        }
+                return;
+            }
 
-        if (!streamMode && key.leftArrow) {
-            setFocus("sidebar");
+            if (key.tab) {
+                setFocus((f) => (f === "sidebar" ? "content" : "sidebar"));
 
-            return;
-        }
+                return;
+            }
 
-        if (!streamMode && key.rightArrow) {
-            setFocus("content");
+            if (key.leftArrow) {
+                setFocus("sidebar");
 
-            return;
+                return;
+            }
+
+            if (key.rightArrow) {
+                setFocus("content");
+
+                return;
+            }
         }
 
         const effectiveFocus = streamMode ? "content" : focus;
@@ -477,8 +479,8 @@ export function App({
             return;
         }
 
-        if (key.pageDown) {
-            if (effectiveFocus === "content") {
+        if (effectiveFocus === "content") {
+            if (key.pageDown) {
                 const oh = streamMode ? rows - 2 : rows - 4;
 
                 setScrollOffset((prev) => {
@@ -492,12 +494,11 @@ export function App({
 
                     return newOffset >= maxOffset ? null : newOffset;
                 });
-            }
-            return;
-        }
 
-        if (key.pageUp) {
-            if (effectiveFocus === "content") {
+                return;
+            }
+
+            if (key.pageUp) {
                 const oh = streamMode ? rows - 2 : rows - 4;
 
                 setScrollOffset((prev) => {
@@ -505,26 +506,22 @@ export function App({
                     const currentStart = prev ?? Math.max(0, total - oh);
                     return Math.max(0, currentStart - oh);
                 });
+
+                return;
             }
 
-            return;
-        }
-
-        if ((key as Record<string, boolean>).home) {
-            if (effectiveFocus === "content") {
+            if ((key as Record<string, boolean>).home) {
                 setScrollOffset(0);
+
+                return;
             }
 
-            return;
-        }
-
-        if ((key as Record<string, boolean>).end) {
-            if (effectiveFocus === "content") {
+            if ((key as Record<string, boolean>).end) {
                 setScrollOffset(null);
                 setHasNewOutput(false);
-            }
 
-            return;
+                return;
+            }
         }
     });
 

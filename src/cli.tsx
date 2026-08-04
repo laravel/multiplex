@@ -14,6 +14,19 @@ const DEFAULT_COLORS = [
     "#fcd34d",
 ];
 
+let colorCount = 0;
+
+function getNextColor(existing: CommandDef[]): string {
+    const usedColors = new Set(existing.map((c) => c.color));
+    const available = DEFAULT_COLORS.filter((c) => !usedColors.has(c));
+
+    if (available.length > 0) {
+        return available[0];
+    }
+
+    return DEFAULT_COLORS[colorCount++ % DEFAULT_COLORS.length];
+}
+
 function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
     const parts = value.split(",");
 
@@ -36,12 +49,10 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
         }
 
         const validHex = /^#[0-9a-fA-F]{6}$/.test(parts[1]);
-        color = validHex
-            ? parts[1]
-            : DEFAULT_COLORS[previous.length % DEFAULT_COLORS.length];
+        color = validHex ? parts[1] : getNextColor(previous);
         cmdStr = parts.slice(2).join(",");
     } else {
-        color = DEFAULT_COLORS[previous.length % DEFAULT_COLORS.length];
+        color = getNextColor(previous);
         cmdStr = parts.slice(1).join(",");
     }
 

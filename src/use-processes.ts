@@ -22,12 +22,16 @@ const hasNotifySend =
         }
     })();
 
+function escapeAppleScript(s: string): string {
+    return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 function notify(title: string, message: string) {
     try {
         if (process.platform === "darwin") {
             spawn("osascript", [
                 "-e",
-                `display notification "${message}" with title "${title}"`,
+                `display notification "${escapeAppleScript(message)}" with title "${escapeAppleScript(title)}"`,
             ], { stdio: "ignore", detached: true }).unref();
         } else if (hasNotifySend) {
             spawn("notify-send", [title, message], {

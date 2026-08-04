@@ -35,7 +35,10 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
             );
         }
 
-        color = parts[1];
+        const validHex = /^#[0-9a-fA-F]{6}$/.test(parts[1]);
+        color = validHex
+            ? parts[1]
+            : DEFAULT_COLORS[previous.length % DEFAULT_COLORS.length];
         cmdStr = parts.slice(2).join(",");
     } else {
         color = DEFAULT_COLORS[previous.length % DEFAULT_COLORS.length];

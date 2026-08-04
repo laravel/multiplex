@@ -453,7 +453,6 @@ export function App({
 
                 return;
             }
-
         }
     });
 
@@ -543,7 +542,7 @@ export function App({
         );
     }
 
-    const focusedBorder = "#00ffff";
+    const focusedBorder = "#93c5fd";
     const unfocusedBorder = "#333333";
 
     return (

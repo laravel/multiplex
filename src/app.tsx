@@ -454,17 +454,6 @@ export function App({
                 return;
             }
 
-            if ((key as Record<string, boolean>).home) {
-                scrollToTop();
-
-                return;
-            }
-
-            if ((key as Record<string, boolean>).end) {
-                scrollToBottom();
-
-                return;
-            }
         }
     });
 

@@ -40,22 +40,38 @@ multiplex 'server,php artisan serve' 'queue,php artisan queue:listen' 'vite,pnpm
 # With custom colors
 multiplex 'server,#93c5fd,php artisan serve' 'queue,#fb7185,php artisan queue:listen'
 
+# Set the terminal tab title
+multiplex --title "Admin" 'server,php artisan serve' 'queue,php artisan queue:listen'
+
 # Start in stream mode with timestamps
 multiplex -s --timestamps 'server,php artisan serve' 'queue,php artisan queue:listen'
 
 # Custom working directory
 multiplex --cwd /path/to/project 'server,php artisan serve'
+
+# Disable auto-restart
+multiplex --no-restart 'build,pnpm run build'
 ```
 
 ### Options
 
 | Option | Description | Default |
 | --- | --- | --- |
-| `--cwd <path>` | Working directory for commands | Current directory |
+| `--title <name>` | Set the terminal tab title | |
+| `--cwd <path>` | Set the working directory | Current directory |
 | `-s, --stream` | Start in stream mode (interleaved output) | `false` |
-| `--timestamps` | Show timestamps in stream mode | `false` |
+| `--timestamps` | Display timestamps on each output line | `false` |
+| `--no-restart` | Disable auto-restart on crash | |
 | `--buffer-size <lines>` | Max lines kept per command buffer | `2000` |
 | `--stream-buffer-size <lines>` | Max lines kept in stream buffer | `10000` |
+
+## Auto-Restart
+
+Processes that crash (exit with a non-zero code) are automatically restarted after a 1-second delay. If a process fails 5 times in a row, it stops restarting and is marked as failed in the sidebar. A manual restart with `r` resets the counter.
+
+A desktop notification is sent when a process permanently fails (macOS via `osascript`, Linux via `notify-send` if available).
+
+Use `--no-restart` to disable auto-restart for one-shot commands like builds or migrations.
 
 ## Keyboard Shortcuts
 
@@ -66,8 +82,9 @@ multiplex --cwd /path/to/project 'server,php artisan serve'
 | `1`-`9` | Jump to tab by number |
 | `Tab` | Toggle focus between sidebar and content |
 | `Left` / `Right` | Move focus to sidebar / content |
-| `Up` / `Down` | Navigate tabs (sidebar) or scroll (content) |
+| `Up` / `Down` / `j` / `k` | Navigate tabs (sidebar) or scroll (content) |
 | `Page Up` / `Page Down` | Scroll one page |
+| `g` / `G` | Scroll to top / bottom |
 
 ### Actions
 
@@ -92,6 +109,9 @@ multiplex --cwd /path/to/project 'server,php artisan serve'
 - **Tabbed view** with a sidebar showing all running commands
 - **Stream mode** for interleaved output with colored labels
 - **Search** with ANSI-aware highlighting across output
+- **Timestamps** on output lines in both tabbed and stream modes
+- **Auto-restart** crashed processes with a 5-attempt limit
+- **Desktop notifications** when a process permanently fails
 - **Scrollbar** when content exceeds the viewport
 - **Process management** - restart failed processes, clear output
 - **Error indicators** in the sidebar when a process fails

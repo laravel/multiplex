@@ -4,7 +4,7 @@ import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
-import { formatTimestamp, hexToRgb, SIDEBAR_WIDTH } from "./util.js";
+import { formatTimestamp, hexToRgb, sidebarWidth } from "./util.js";
 
 type AppProps = {
     commandDefs: CommandDef[];
@@ -562,7 +562,7 @@ export function App({
     });
 
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
-    const sidebarWidth = SIDEBAR_WIDTH;
+    const computedSidebarWidth = sidebarWidth(commandDefs.map((c) => c.label));
 
     const displayLines = !streamMode
         ? outputBuffersRef.current[selectedIndex].split("\n")
@@ -655,7 +655,7 @@ export function App({
             <Box flexDirection="row" flexGrow={1}>
                 <Box
                     flexDirection="column"
-                    width={sidebarWidth}
+                    width={computedSidebarWidth}
                     borderStyle="round"
                     borderColor={
                         focus === "sidebar" ? focusedBorder : unfocusedBorder
@@ -664,7 +664,7 @@ export function App({
                     {commandDefs.map((cmd, i) => {
                         const selected = i === selectedIndex;
                         const failed = failedProcs.has(i);
-                        const innerWidth = sidebarWidth - 2;
+                        const innerWidth = computedSidebarWidth - 2;
                         const indicator = failed
                             ? "✕"
                             : i < 9

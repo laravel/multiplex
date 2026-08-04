@@ -5,9 +5,9 @@ import {
     CONTENT_BORDER,
     CONTENT_PADDING,
     SCROLLBAR_WIDTH,
-    SIDEBAR_WIDTH,
     TIMESTAMP_WIDTH,
     formatTimestamp,
+    sidebarWidth,
     systemMsg,
 } from "./util.js";
 
@@ -98,7 +98,7 @@ export function useProcesses({
                     FORCE_COLOR: "1",
                     COLUMNS: String(
                         (stdout?.columns ?? 80) -
-                            SIDEBAR_WIDTH -
+                            sidebarWidth(commandDefs.map((c) => c.label)) -
                             CONTENT_BORDER -
                             CONTENT_PADDING -
                             SCROLLBAR_WIDTH -

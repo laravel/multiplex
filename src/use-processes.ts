@@ -80,7 +80,10 @@ export function useProcesses({
     const streamLinesRef = useRef<StreamLine[]>([]);
     const partialsRef = useRef<string[]>(commandDefs.map(() => ""));
     const procsRef = useRef<ChildProcess[]>([]);
-    const restartingRef = useRef<Set<number>>(new Set());
+    // How many exits per command are ours rather than the process failing. A
+    // plain flag was wrong in both directions: set with no exit coming, it
+    // swallowed the next real crash, and it could not hold two rapid restarts.
+    const restartingRef = useRef<Map<number, number>>(new Map());
     const spawnTimeRef = useRef<number[]>(commandDefs.map(() => 0));
     const pendingRestartsRef = useRef<Set<number>>(new Set());
     const autoRestartTimersRef = useRef<
@@ -197,8 +200,10 @@ export function useProcesses({
             });
 
             proc.on("exit", (exitCode) => {
-                if (restartingRef.current.has(i)) {
-                    restartingRef.current.delete(i);
+                const weKilledIt = restartingRef.current.get(i) ?? 0;
+
+                if (weKilledIt > 0) {
+                    restartingRef.current.set(i, weKilledIt - 1);
 
                     return;
                 }
@@ -291,15 +296,25 @@ export function useProcesses({
 
             if (manual) {
                 autoRestartCountsRef.current[i] = 0;
-                restartingRef.current.add(i);
 
                 const proc = procsRef.current[i];
 
-                if (proc) {
+                // Only claim an exit when the kill is what causes it. Restarting
+                // a process that already died — the whole point of `r` on a
+                // failed tab — sends no signal and produces no exit event, so
+                // claiming one here would swallow the replacement's crash and
+                // leave a dead process looking healthy.
+                if (
+                    proc?.pid &&
+                    proc.exitCode === null &&
+                    proc.signalCode === null
+                ) {
                     try {
-                        if (proc.pid) {
-                            process.kill(-proc.pid, "SIGKILL");
-                        }
+                        process.kill(-proc.pid, "SIGKILL");
+                        restartingRef.current.set(
+                            i,
+                            (restartingRef.current.get(i) ?? 0) + 1,
+                        );
                     } catch {
                         //
                     }

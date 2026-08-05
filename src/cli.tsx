@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { constants } from "node:os";
 import { Command } from "commander";
 import { render } from "ink";
 import { App } from "./app.js";
@@ -165,14 +166,11 @@ if (opts.title) {
     process.stdout.write(`\x1b]0;${opts.title}\x07`);
 }
 
-process.stdout.write("\x1b[?1049h\x1b[?25l");
-process.on("exit", () => {
-    killAll();
-    process.stdout.write("\x1b[?25h\x1b[?1049l");
-});
-
 const outputRef: OutputRef = { current: [] };
 const procsRef: ProcsRef = { current: [] };
+
+let instance: ReturnType<typeof render> | undefined;
+let shuttingDown = false;
 
 function killAll() {
     for (const proc of procsRef.current) {
@@ -186,8 +184,80 @@ function killAll() {
     }
 }
 
+function restoreTerminal() {
+    try {
+        process.stdout.write("\x1b[?25h\x1b[?1049l");
+    } catch {
+        //
+    }
+}
+
+function flushOutput() {
+    if (outputRef.current.length === 0) {
+        return;
+    }
+
+    const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
+
+    try {
+        for (const sl of outputRef.current) {
+            const cmd = commandDefs[sl.cmdIndex];
+            const [r, g, b] = hexToRgb(cmd.color);
+            const padding = " ".repeat(maxLabelLen - cmd.label.length);
+            const ts = opts.timestamps ? formatTimestamp(sl.time) : "";
+
+            process.stdout.write(
+                `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
+            );
+        }
+    } catch {
+        // The terminal can already be gone when we got here via SIGHUP.
+    }
+}
+
+/**
+ * Unmount first, so Ink's final frame and its raw-mode teardown happen while
+ * we still own the alternate screen, then leave the screen before flushing so
+ * the logs land in the real scrollback.
+ */
+function shutdown(code: number): never {
+    if (!shuttingDown) {
+        shuttingDown = true;
+
+        try {
+            instance?.unmount();
+        } catch {
+            //
+        }
+
+        killAll();
+        restoreTerminal();
+        flushOutput();
+    }
+
+    process.exit(code);
+}
+
+process.stdout.write("\x1b[?1049h\x1b[?25l");
+
+// Signals terminate the process without running exit handlers, and the children
+// sit in their own process groups so they never see the terminal's own SIGHUP.
+// Without these, closing the terminal window leaves every dev server running
+// and holding its port.
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"] as const) {
+    process.on(signal, () => {
+        shutdown(128 + constants.signals[signal]);
+    });
+}
+
+// Last resort for exits we did not route through shutdown().
+process.on("exit", () => {
+    killAll();
+    restoreTerminal();
+});
+
 try {
-    const { waitUntilExit } = render(
+    instance = render(
         <App
             commandDefs={commandDefs}
             cwd={opts.cwd}
@@ -203,28 +273,9 @@ try {
         { exitOnCtrlC: true },
     );
 
-    await waitUntilExit();
+    await instance.waitUntilExit();
 } catch {
-    process.exit(1);
+    shutdown(1);
 }
 
-killAll();
-
-process.stdout.write("\x1b[?25h\x1b[?1049l");
-
-if (outputRef.current.length > 0) {
-    const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
-
-    for (const sl of outputRef.current) {
-        const cmd = commandDefs[sl.cmdIndex];
-        const [r, g, b] = hexToRgb(cmd.color);
-        const padding = " ".repeat(maxLabelLen - cmd.label.length);
-        const ts = opts.timestamps ? formatTimestamp(sl.time) : "";
-
-        process.stdout.write(
-            `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
-        );
-    }
-}
-
-process.exit(0);
+shutdown(0);

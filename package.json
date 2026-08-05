@@ -63,5 +63,8 @@
         "@types/react": "^18.3.31",
         "tsx": "^4.23.5",
         "typescript": "^5.9.3"
+    },
+    "publishConfig": {
+        "access": "public"
     }
 }

@@ -142,9 +142,6 @@ describe("stripAnsi", () => {
         assert.equal(stripAnsi("\x1b]0;title\x07abc"), "]0;title\x07abc");
     });
 
-    // indexMatches strips with a regex while highlightLine rebuilds from parsed
-    // segments. If the two ever disagree on plain text, match indices drift and
-    // the wrong match gets flagged as active.
     test("agrees with the highlighter on where matches are", () => {
         const lines = [
             "plain text",

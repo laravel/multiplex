@@ -2,17 +2,13 @@ const MATCH_BG = "\x1b[48;2;80;80;0m";
 const CURRENT_MATCH_BG = "\x1b[48;2;160;120;0m";
 const RESET_BG = "\x1b[49m";
 
-// Mirrors the segment pattern in parseSegments: everything that pattern leaves
-// out of its plain text (CSI sequences, stray escapes, carriage returns) is
-// dropped here too, so both paths agree on where a match starts.
+// Must drop exactly what parseSegments leaves out of its plain text, or match
+// offsets drift between the two.
 const STRIP_PATTERN = /\x1b\[[0-9;]*[A-Za-z]|\x1b|\r/g;
 
 export interface SearchIndex {
-    /** Total matches across every line. */
     count: number;
-    /** Line index of each match, in match order. */
     lineOf: number[];
-    /** Line index -> index of the first match on that line. */
     firstMatchOnLine: Map<number, number>;
 }
 
@@ -56,11 +52,6 @@ function findMatches(plain: string, query: string): [number, number][] {
     return matches;
 }
 
-/**
- * Count and locate every match in the buffer without building highlighted
- * output. Linear in total characters, so it stays cheap on a full stream
- * buffer; only the visible slice is ever handed to highlightLine.
- */
 export function indexMatches(lines: string[], query: string): SearchIndex {
     const index: SearchIndex = {
         count: 0,
@@ -95,11 +86,8 @@ export function indexMatches(lines: string[], query: string): SearchIndex {
     return index;
 }
 
-/**
- * Highlight one line, preserving its ANSI codes. firstMatchIdx is the index
- * this line's first match has in the buffer-wide index, so the active match
- * can be picked out without knowing anything about the other lines.
- */
+// firstMatchIdx is the index of this line's first match within the buffer-wide
+// index, which is what makes activeMatchIdx comparable here.
 export function highlightLine(
     raw: string,
     query: string,
@@ -135,9 +123,8 @@ export function highlightLine(
 
     let cursor = 0;
 
-    // Matches are sorted by start and all share the query's length, so walking
-    // a single cursor forward finds the first match covering a position.
-    // Split points only ever move right, which keeps this linear.
+    // Correct only because p never moves left and matches share a length:
+    // one forward-only cursor then finds the first match covering p.
     const matchAt = (p: number): number => {
         while (cursor < matches.length && matches[cursor][1] <= p) {
             cursor++;

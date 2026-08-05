@@ -539,9 +539,7 @@ export function App({
         cols,
     );
 
-    // The buffers live in refs, so renderTick is what tells us the output
-    // actually changed. Rebuilding these on every render is what made search
-    // (and stream mode generally) crawl on a full buffer.
+    // renderTick stands in for the ref contents React cannot see change.
     const displayLines = useMemo(() => {
         if (!streamMode) {
             return outputBuffersRef.current[selectedIndex].split("\n");
@@ -585,8 +583,6 @@ export function App({
             ? ((currentMatch % matchCount) + matchCount) % matchCount
             : 0;
 
-    // An active search drives its own scrolling: centre on the current match,
-    // otherwise sit at the bottom of the buffer.
     const windowStart = (() => {
         if (searchQuery) {
             if (searchInputMode || matchCount === 0) {
@@ -629,8 +625,6 @@ export function App({
     let thumbEnd = 0;
 
     if (showScrollbar) {
-        // windowStart, not scrollOffset: during a search the window follows the
-        // active match rather than the scroll position.
         const currentOffset = windowStart;
         const maxOffset = Math.max(1, totalLines - outputHeight);
         const thumbSize = Math.max(

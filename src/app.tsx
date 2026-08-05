@@ -682,6 +682,14 @@ export function App({
 
     return (
         <Box flexDirection="column" height={rows} width={cols}>
+            <Box height={1} paddingX={1} justifyContent="space-between">
+                <Text color="#ffffff" dimColor>
+                    {title ?? ""}
+                </Text>
+                <Text color="#ffffff" dimColor>
+                    {cwd}
+                </Text>
+            </Box>
             <Box flexDirection="row" flexGrow={1}>
                 <Box
                     flexDirection="column"

@@ -37,6 +37,7 @@ Always run build + test after changes.
 - **Render batching** via `setTimeout(fn, 16)` to avoid excessive React re-renders from fast-arriving process output.
 - **Never highlight the whole buffer.** Search indexes the full buffer linearly but only highlights the visible window. Highlighting everything was quadratic — searching a full 10k-line stream buffer for a common letter blocked the event loop for ~38 seconds, which also swallowed the keystrokes that would have cancelled it.
 - **`stripAnsi`'s regex must mirror `parseSegments`.** `indexMatches` strips with a regex while `highlightLine` rebuilds plain text from parsed segments. If they disagree on what counts as plain text, match offsets drift and the wrong match gets flagged as active. A test in `search.test.ts` pins this against OSC sequences, stray escapes, and carriage returns.
+- **The title is stripped, not escaped.** OSC strings have no escape mechanism, so a control character in `--title` can't be quoted — a BEL or ESC terminates the sequence and the rest of the title reaches the terminal as commands. `sanitizeTitle` drops control characters at the option boundary in `multiplex()`, so the OSC write, the Ink frame and the desktop notification all get the sanitized value.
 - **`renderTick` is the buffer revision.** Output buffers live in refs, so React can't see them change. Anything memoized off buffer contents keys on `renderTick`, which `triggerRender` bumps after every mutation.
 
 ## Release

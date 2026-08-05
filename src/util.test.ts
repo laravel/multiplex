@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { hexToRgb } from "./util.js";
+import { hexToRgb, sidebarWidth } from "./util.js";
 
 describe("hexToRgb", () => {
     test("parses basic hex colors", () => {
@@ -18,5 +18,35 @@ describe("hexToRgb", () => {
 
     test("handles uppercase hex", () => {
         assert.deepEqual(hexToRgb("#FF00FF"), [255, 0, 255]);
+    });
+});
+
+describe("sidebarWidth", () => {
+    test("never goes below the minimum", () => {
+        assert.equal(sidebarWidth(["a"], 80), 15);
+        assert.equal(sidebarWidth(["server"], 80), 15);
+        assert.equal(sidebarWidth(["a"], 1), 15);
+    });
+
+    test("never goes above the maximum", () => {
+        assert.equal(sidebarWidth(["a"], 400), 40);
+        assert.equal(sidebarWidth(["a"], 1000), 40);
+        assert.equal(sidebarWidth(["x".repeat(50)], 80), 40);
+    });
+
+    test("targets 15% of the terminal when that clears the labels", () => {
+        assert.equal(sidebarWidth(["server"], 200), 30);
+        assert.equal(sidebarWidth(["server", "queue", "vite"], 120), 18);
+    });
+
+    test("widens past the target to fit a long label", () => {
+        assert.equal(sidebarWidth(["averyveryverylonglabel"], 80), 29);
+    });
+
+    test("sizes to the longest label", () => {
+        assert.equal(
+            sidebarWidth(["a", "longest-label"], 200),
+            sidebarWidth(["longest-label"], 200),
+        );
     });
 });

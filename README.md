@@ -18,7 +18,7 @@ npx @laravel/multiplex 'server,php artisan serve' 'queue,php artisan queue:liste
 
 ## Requirements
 
-- **Node 22.12 or later.**
+- **Node 22.13 or later.**
 - **An interactive terminal.** Both stdin and stdout must be a TTY. Piping or redirecting either one (`multiplex ... | tee log`) exits with an error instead of starting your commands, as does running it from CI.
 - **Non-interactive commands.** Child processes are spawned without stdin, so anything that prompts for input — `php artisan tinker`, a migration confirmation — won't work.
 - **A stable terminal width.** Children are told how wide they are via `COLUMNS` when they start, and that can't be updated afterwards. Resizing the terminal leaves already-running commands sizing their output to the old width; press `r` to restart one against the new width.

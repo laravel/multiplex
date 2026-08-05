@@ -2,7 +2,7 @@
 
 A tabbed TUI for running multiple commands simultaneously with searchable, scrollable output. Built with [Ink](https://github.com/vadimdemedes/ink).
 
-When you exit, all output is flushed to your terminal scrollback so you don't lose your logs.
+When you exit, the interleaved output is flushed to your terminal scrollback so you don't lose your logs, up to the `--stream-buffer-size` limit.
 
 ## Install
 
@@ -21,6 +21,7 @@ npx @laravel/multiplex 'server,php artisan serve' 'queue,php artisan queue:liste
 - **Node 22.12 or later.**
 - **An interactive terminal.** Both stdin and stdout must be a TTY. Piping or redirecting either one (`multiplex ... | tee log`) exits with an error instead of starting your commands, as does running it from CI.
 - **Non-interactive commands.** Child processes are spawned without stdin, so anything that prompts for input — `php artisan tinker`, a migration confirmation — won't work.
+- **A stable terminal width.** Children are told how wide they are via `COLUMNS` when they start, and that can't be updated afterwards. Resizing the terminal leaves already-running commands sizing their output to the old width; press `r` to restart one against the new width.
 
 ## Usage
 
@@ -110,7 +111,7 @@ Commands that omit a color are assigned one from the built-in palette (also expo
 
 ## Auto-Restart
 
-Processes that crash (exit with a non-zero code) are automatically restarted after a 1-second delay. If a process fails 5 times in a row, it stops restarting and is marked as failed in the sidebar. A manual restart with `r` resets the counter.
+Processes that crash (exit with a non-zero code) are automatically restarted after a 1-second delay. A process is restarted up to 5 times; on the 6th consecutive failure it stops restarting and is marked as failed in the sidebar. A manual restart with `r` resets the counter.
 
 A desktop notification is sent when a process permanently fails (macOS via `osascript`, Linux via `notify-send` if available).
 

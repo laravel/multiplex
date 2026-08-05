@@ -89,6 +89,8 @@ const code = await multiplex({
 process.exit(code);
 ```
 
+Every `command` is run through `sh -c`, so it is a shell string, not an argv array — pipes, redirects and `&&` all work. That also means **you must never build a `command` out of untrusted input.** Anything that reaches the string is executed with the privileges of the calling process, so a value taken from a config file, a request payload or a workspace manifest is a remote code execution vector. If the commands are not written by you, quote every interpolated value yourself before passing it in.
+
 `multiplex()` takes over the terminal for the duration of the call: it enters the alternate screen, installs its own `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT` handlers, and renders the TUI. It resolves with the same exit code the CLI would have used — `0` normally, `1` if rendering failed. By then the terminal is restored, every child process is dead, the buffered output has been flushed to scrollback, and the signal handlers it installed have been removed, so the calling process is free to carry on. The same requirements apply as for the CLI: both stdin and stdout must be a TTY.
 
 Options are validated before anything is written to the terminal, so an invalid option throws with the screen untouched.

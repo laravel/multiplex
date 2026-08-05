@@ -108,7 +108,10 @@ export function useProcesses({
                     FORCE_COLOR: "1",
                     COLUMNS: String(
                         (stdout?.columns ?? 80) -
-                            sidebarWidth(commandDefs.map((c) => c.label)) -
+                            sidebarWidth(
+                                commandDefs.map((c) => c.label),
+                                stdout?.columns ?? 80,
+                            ) -
                             CONTENT_BORDER -
                             CONTENT_PADDING -
                             SCROLLBAR_WIDTH -

@@ -12,9 +12,15 @@ export const formatTimestamp = (time: Date) =>
 const MIN_SIDEBAR_WIDTH = 15;
 const MAX_SIDEBAR_WIDTH = 40;
 
-export function sidebarWidth(labels: string[]): number {
+export function sidebarWidth(labels: string[], totalColumns: number): number {
     const maxLen = Math.max(...labels.map((l) => l.length));
-    return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, maxLen + 7));
+    const labelWidth = maxLen + 7;
+    const targetWidth = Math.floor(totalColumns * 0.15);
+
+    return Math.max(
+        MIN_SIDEBAR_WIDTH,
+        Math.min(MAX_SIDEBAR_WIDTH, Math.max(labelWidth, targetWidth)),
+    );
 }
 
 export const TIMESTAMP_WIDTH = 9;

@@ -593,7 +593,10 @@ export function App({
 
     const renderNow = Date.now();
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
-    const computedSidebarWidth = sidebarWidth(commandDefs.map((c) => c.label));
+    const computedSidebarWidth = sidebarWidth(
+        commandDefs.map((c) => c.label),
+        cols,
+    );
 
     const displayLines = !streamMode
         ? outputBuffersRef.current[selectedIndex].split("\n")

@@ -16,6 +16,12 @@ Or run directly:
 npx @laravel/multiplex 'server,php artisan serve' 'queue,php artisan queue:listen'
 ```
 
+## Requirements
+
+- **Node 18 or later.**
+- **An interactive terminal.** Both stdin and stdout must be a TTY. Piping or redirecting either one (`multiplex ... | tee log`) exits with an error instead of starting your commands, as does running it from CI.
+- **Non-interactive commands.** Child processes are spawned without stdin, so anything that prompts for input — `php artisan tinker`, a migration confirmation — won't work.
+
 ## Usage
 
 ```bash
@@ -29,7 +35,7 @@ label,command
 label,#color,command
 ```
 
-Colors are optional hex values. If omitted, colors are assigned automatically from a built-in palette.
+Colors are optional 6-digit hex values such as `#93c5fd`. If omitted, they're assigned automatically from a built-in palette, avoiding duplicates. A malformed color is an error rather than being ignored, and shorthand like `#fff` is not accepted.
 
 ### Examples
 
@@ -58,7 +64,7 @@ multiplex --no-restart 'build,pnpm run build'
 | Option | Description | Default |
 | --- | --- | --- |
 | `--title <name>` | Set the terminal tab title | |
-| `--cwd <path>` | Set the working directory | Current directory |
+| `--cwd <path>` | Set the working directory (must exist) | Current directory |
 | `-s, --stream` | Start in stream mode (interleaved output) | `false` |
 | `--timestamps` | Display timestamps on each output line | `false` |
 | `--no-restart` | Disable auto-restart on crash | |
@@ -93,8 +99,11 @@ Use `--no-restart` to disable auto-restart for one-shot commands like builds or 
 | `t` | Toggle between tabbed and stream mode |
 | `r` | Restart the selected process |
 | `c` | Clear output (current tab or stream) |
+| `f` | Filter which commands appear in the stream |
 | `/` | Open search |
 | `q` | Quit |
+
+`r`, `Tab` and `Left`/`Right` apply to tabbed mode; `f` applies to stream mode. In filter mode, `1`-`9` toggle each command on and off and `f` or `Esc` closes it — you can always leave at least one command visible.
 
 ### Search
 
@@ -107,7 +116,7 @@ Use `--no-restart` to disable auto-restart for one-shot commands like builds or 
 ## Features
 
 - **Tabbed view** with a sidebar showing all running commands
-- **Stream mode** for interleaved output with colored labels
+- **Stream mode** for interleaved output with colored labels, with per-command filtering
 - **Search** with ANSI-aware highlighting across output
 - **Timestamps** on output lines in both tabbed and stream modes
 - **Auto-restart** crashed processes with a 5-attempt limit
@@ -118,4 +127,4 @@ Use `--no-restart` to disable auto-restart for one-shot commands like builds or 
 - **New output indicator** when scrolled up and new data arrives
 - **Buffer limits** to keep memory usage low during long sessions
 - **Output flush** on exit so logs are preserved in terminal scrollback
-- **Process group cleanup** ensures no zombie processes are left behind
+- **Process group cleanup** on quit and on `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT`, so closing the terminal window doesn't leave dev servers running and holding their ports

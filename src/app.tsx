@@ -1,14 +1,14 @@
-import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { homedir } from "node:os";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { highlightSearch } from "./search.js";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { highlightLine, indexMatches } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import {
-    MIN_TABS_LAYOUT_WIDTH,
     formatTimestamp,
     hexToRgb,
+    MIN_TABS_LAYOUT_WIDTH,
     sidebarWidth,
 } from "./util.js";
 
@@ -68,7 +68,7 @@ export function App({
     const [searchInputMode, setSearchInputMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentMatch, setCurrentMatch] = useState(0);
-    const [, setRenderTick] = useState(0);
+    const [renderTick, setRenderTick] = useState(0);
     const [focus, setFocus] = useState<"sidebar" | "content">("content");
     const [filterMode, setFilterMode] = useState(false);
     const [hiddenProcs, setHiddenProcs] = useState<Set<number>>(new Set());
@@ -90,7 +90,6 @@ export function App({
     } = useScroll(outputHeight);
 
     const matchCountRef = useRef(0);
-    const matchLinesRef = useRef<number[]>([]);
 
     const pendingRender = useRef(false);
     const triggerRender = useCallback(() => {
@@ -165,71 +164,6 @@ export function App({
 
         return () => clearInterval(id);
     }, []);
-
-    const getVisibleLinesAndMatchCount = (
-        lines: string[],
-    ): {
-        visibleLines: string[];
-        matchCount: number;
-    } => {
-        if (!searchQuery) {
-            matchCountRef.current = 0;
-            matchLinesRef.current = [];
-
-            return {
-                matchCount: 0,
-                visibleLines:
-                    scrollOffset === null
-                        ? lines.slice(-outputHeight)
-                        : lines.slice(
-                              scrollOffset,
-                              scrollOffset + outputHeight,
-                          ),
-            };
-        }
-
-        const fullContent = lines.join("\n");
-        const hl = highlightSearch(
-            fullContent,
-            searchQuery,
-            searchInputMode ? -1 : currentMatch,
-        );
-
-        const matchCount = hl.count;
-
-        matchCountRef.current = matchCount;
-        matchLinesRef.current = hl.linePositions;
-
-        const highlightedLines = hl.result.split("\n");
-
-        if (!searchInputMode && matchCount > 0 && hl.linePositions.length > 0) {
-            const effectiveMatch =
-                ((currentMatch % matchCount) + matchCount) % matchCount;
-            const targetLine = hl.linePositions[effectiveMatch] ?? 0;
-            const halfWindow = Math.floor(outputHeight / 2);
-            const maxStart = Math.max(
-                0,
-                highlightedLines.length - outputHeight,
-            );
-            const scrollStart = Math.max(
-                0,
-                Math.min(targetLine - halfWindow, maxStart),
-            );
-
-            return {
-                matchCount,
-                visibleLines: highlightedLines.slice(
-                    scrollStart,
-                    scrollStart + outputHeight,
-                ),
-            };
-        }
-
-        return {
-            matchCount,
-            visibleLines: highlightedLines.slice(-outputHeight),
-        };
-    };
 
     const resolveFooter = (): React.ReactNode => {
         if (filterMode) {
@@ -605,32 +539,86 @@ export function App({
         cols,
     );
 
-    const displayLines = !streamMode
-        ? outputBuffersRef.current[selectedIndex].split("\n")
-        : streamLinesRef.current
-              .filter((sl) => !hiddenProcs.has(sl.cmdIndex))
-              .map((sl) => {
-                  const cmd = commandDefs[sl.cmdIndex];
-                  const [r, g, b] = hexToRgb(cmd.color);
-                  const padding = " ".repeat(maxLabelLen - cmd.label.length);
-                  const ts = timestamps ? formatTimestamp(sl.time) : "";
+    // The buffers live in refs, so renderTick is what tells us the output
+    // actually changed. Rebuilding these on every render is what made search
+    // (and stream mode generally) crawl on a full buffer.
+    const displayLines = useMemo(() => {
+        if (!streamMode) {
+            return outputBuffersRef.current[selectedIndex].split("\n");
+        }
 
-                  return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
-              });
+        return streamLinesRef.current
+            .filter((sl) => !hiddenProcs.has(sl.cmdIndex))
+            .map((sl) => {
+                const cmd = commandDefs[sl.cmdIndex];
+                const [r, g, b] = hexToRgb(cmd.color);
+                const padding = " ".repeat(maxLabelLen - cmd.label.length);
+                const ts = timestamps ? formatTimestamp(sl.time) : "";
 
-    const { visibleLines, matchCount } =
-        getVisibleLinesAndMatchCount(displayLines);
+                return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
+            });
+    }, [
+        renderTick,
+        streamMode,
+        selectedIndex,
+        hiddenProcs,
+        commandDefs,
+        timestamps,
+        maxLabelLen,
+        outputBuffersRef,
+        streamLinesRef,
+    ]);
+
+    const searchIndex = useMemo(
+        () => indexMatches(displayLines, searchQuery),
+        [displayLines, searchQuery],
+    );
+
+    const matchCount = searchIndex.count;
+
+    matchCountRef.current = matchCount;
 
     totalLinesRef.current = displayLines.length;
-
-    while (visibleLines.length < outputHeight) {
-        visibleLines.push("");
-    }
 
     const effectiveMatch =
         matchCount > 0
             ? ((currentMatch % matchCount) + matchCount) % matchCount
             : 0;
+
+    // An active search drives its own scrolling: centre on the current match,
+    // otherwise sit at the bottom of the buffer.
+    const windowStart = (() => {
+        if (searchQuery) {
+            if (searchInputMode || matchCount === 0) {
+                return Math.max(0, displayLines.length - outputHeight);
+            }
+
+            const targetLine = searchIndex.lineOf[effectiveMatch] ?? 0;
+            const halfWindow = Math.floor(outputHeight / 2);
+            const maxStart = Math.max(0, displayLines.length - outputHeight);
+
+            return Math.max(0, Math.min(targetLine - halfWindow, maxStart));
+        }
+
+        return scrollOffset ?? Math.max(0, displayLines.length - outputHeight);
+    })();
+
+    const visibleLines = displayLines
+        .slice(windowStart, windowStart + outputHeight)
+        .map((line, i) =>
+            searchQuery
+                ? highlightLine(
+                      line,
+                      searchQuery,
+                      searchInputMode ? -1 : effectiveMatch,
+                      searchIndex.firstMatchOnLine.get(windowStart + i) ?? -1,
+                  )
+                : line,
+        );
+
+    while (visibleLines.length < outputHeight) {
+        visibleLines.push("");
+    }
 
     const Footer = resolveFooter();
 
@@ -641,8 +629,9 @@ export function App({
     let thumbEnd = 0;
 
     if (showScrollbar) {
-        const currentOffset =
-            scrollOffset ?? Math.max(0, totalLines - outputHeight);
+        // windowStart, not scrollOffset: during a search the window follows the
+        // active match rather than the scroll position.
+        const currentOffset = windowStart;
         const maxOffset = Math.max(1, totalLines - outputHeight);
         const thumbSize = Math.max(
             1,

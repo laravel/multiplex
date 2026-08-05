@@ -13,7 +13,7 @@ export type { CommandInput, MultiplexOptions } from "./types.js";
 const SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"] as const;
 
 function positiveInt(value: number, name: string): number {
-    if (!Number.isInteger(value) || value <= 0) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
         throw new Error(`${name} must be a positive integer, got ${value}.`);
     }
 

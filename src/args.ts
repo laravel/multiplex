@@ -101,10 +101,13 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
     });
 }
 
+// Number(), not parseInt(): parseInt stops at the first character it cannot use,
+// so "10abc" became 10 and "1e6" became 1 — a plausible way to ask for a big
+// buffer that silently produced a buffer of one line.
 export function parsePositiveInt(value: string): number {
-    const n = parseInt(value, 10);
+    const n = Number(value);
 
-    if (Number.isNaN(n) || n <= 0) {
+    if (!Number.isSafeInteger(n) || n <= 0) {
         throw new InvalidArgumentError(`"${value}" is not a positive integer.`);
     }
 

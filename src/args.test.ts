@@ -228,11 +228,37 @@ describe("parsePositiveInt", () => {
         assert.equal(parsePositiveInt("2000"), 2000);
     });
 
+    test("accepts exponent notation", () => {
+        assert.equal(parsePositiveInt("1e6"), 1_000_000);
+    });
+
     test("rejects zero, negatives and non-numbers", () => {
         for (const value of ["0", "-1", "abc", "", " "]) {
             assert.throws(() => parsePositiveInt(value), {
                 code: "commander.invalidArgument",
             });
+        }
+    });
+
+    // Regression: parseInt() truncated all of these to a number instead of
+    // rejecting them, so "1e6" quietly became a buffer of one line.
+    test("rejects partial numbers rather than truncating them", () => {
+        for (const value of ["10abc", "5.7", "0.5", "1,000", "1_000", "1 2"]) {
+            assert.throws(
+                () => parsePositiveInt(value),
+                { code: "commander.invalidArgument" },
+                `accepted ${value}`,
+            );
+        }
+    });
+
+    test("rejects values too large to be an exact integer", () => {
+        for (const value of ["1e21", "Infinity", "9007199254740993"]) {
+            assert.throws(
+                () => parsePositiveInt(value),
+                { code: "commander.invalidArgument" },
+                `accepted ${value}`,
+            );
         }
     });
 });

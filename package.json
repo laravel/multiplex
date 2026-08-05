@@ -66,5 +66,9 @@
     },
     "publishConfig": {
         "access": "public"
-    }
+    },
+    "os": [
+        "darwin",
+        "linux"
+    ]
 }

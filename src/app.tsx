@@ -1,4 +1,5 @@
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { homedir } from "node:os";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
@@ -666,6 +667,14 @@ export function App({
     if (streamMode) {
         return (
             <Box flexDirection="column" height={rows} width={cols}>
+                <Box height={2} paddingX={1} justifyContent="space-between">
+                    <Text color="#ffffff" dimColor>
+                        {title ?? ""}
+                    </Text>
+                    <Text color="#ffffff" dimColor>
+                        {cwd.replace(homedir(), "~")}
+                    </Text>
+                </Box>
                 <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
                     {outputContent}
                 </Box>
@@ -687,7 +696,7 @@ export function App({
                     {title ?? ""}
                 </Text>
                 <Text color="#ffffff" dimColor>
-                    {cwd}
+                    {cwd.replace(homedir(), "~")}
                 </Text>
             </Box>
             <Box flexDirection="row" flexGrow={1}>

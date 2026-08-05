@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { hexToRgb, sidebarWidth } from "./util.js";
+import { hexToRgb, sanitizeTitle, sidebarWidth } from "./util.js";
 
 describe("hexToRgb", () => {
     test("parses basic hex colors", () => {
@@ -18,6 +18,42 @@ describe("hexToRgb", () => {
 
     test("handles uppercase hex", () => {
         assert.deepEqual(hexToRgb("#FF00FF"), [255, 0, 255]);
+    });
+});
+
+describe("sanitizeTitle", () => {
+    test("leaves an ordinary title alone", () => {
+        assert.equal(sanitizeTitle("Admin"), "Admin");
+        assert.equal(sanitizeTitle("my app — dev"), "my app — dev");
+    });
+
+    // A BEL ends the OSC sequence, so anything after it would reach the terminal
+    // as commands rather than as part of the title.
+    test("drops the terminators that would end the OSC sequence", () => {
+        assert.equal(sanitizeTitle("ok\x07\x1b[2J"), "ok[2J");
+        assert.equal(sanitizeTitle("ok\x1b\\\x1b[2J"), "ok\\[2J");
+    });
+
+    test("drops every control character", () => {
+        assert.equal(sanitizeTitle("a\x00b\nc\rd\te\x7ff"), "abcdef");
+
+        for (let c = 0; c <= 0x9f; c++) {
+            if (c <= 0x1f || c >= 0x7f) {
+                assert.equal(
+                    sanitizeTitle(String.fromCharCode(c)),
+                    "",
+                    `did not strip \\x${c.toString(16)}`,
+                );
+            }
+        }
+    });
+
+    test("keeps printable and non-ASCII text", () => {
+        assert.equal(sanitizeTitle("laravel 🚀 café"), "laravel 🚀 café");
+    });
+
+    test("collapses to empty when there is nothing printable left", () => {
+        assert.equal(sanitizeTitle("\x1b\x07"), "");
     });
 });
 

@@ -6,6 +6,13 @@ export const hexToRgb = (hex: string): [number, number, number] => [
 
 export const systemMsg = (text: string) => `\x1b[2m\x1b[3m${text}\x1b[0m`;
 
+// OSC strings have no escape mechanism, so a BEL or ESC in the title would end
+// the sequence early and leave the rest of it being read as terminal commands.
+// Dropping the control characters is the only way to close that off. Also keeps
+// them out of the frame Ink renders the title into.
+export const sanitizeTitle = (title: string) =>
+    title.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
+
 export const formatTimestamp = (time: Date) =>
     `\x1b[90m${time.toLocaleTimeString("en-GB")} \x1b[0m`;
 

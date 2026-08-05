@@ -5,7 +5,7 @@ import { render } from "ink";
 import { App } from "./app.js";
 import { normalizeCommands } from "./args.js";
 import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
-import { formatTimestamp, hexToRgb } from "./util.js";
+import { formatTimestamp, hexToRgb, sanitizeTitle } from "./util.js";
 
 export { DEFAULT_COLORS } from "./args.js";
 export type { CommandInput, MultiplexOptions } from "./types.js";
@@ -33,6 +33,7 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         "streamBufferSize",
     );
     const timestamps = options.timestamps ?? false;
+    const title = options.title ? sanitizeTitle(options.title) : undefined;
 
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
         const stream = process.stdin.isTTY ? "stdout" : "stdin";
@@ -148,8 +149,8 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
 
     process.on("exit", exitHandler);
 
-    if (options.title) {
-        process.stdout.write(`\x1b]0;${options.title}\x07`);
+    if (title) {
+        process.stdout.write(`\x1b]0;${title}\x07`);
     }
 
     process.stdout.write("\x1b[?1049h\x1b[?25l");
@@ -164,7 +165,7 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
                 streamBufferSize={streamBufferSize}
                 timestamps={timestamps}
                 autoRestart={options.restart ?? true}
-                title={options.title}
+                title={title}
                 outputRef={outputRef}
                 procsRef={procsRef}
             />,

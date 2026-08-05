@@ -58,6 +58,7 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
 
     let instance: ReturnType<typeof render> | undefined;
     let shuttingDown = false;
+    let titlePushed = false;
 
     function killAll() {
         for (const proc of procsRef.current) {
@@ -74,6 +75,13 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
     function restoreTerminal() {
         try {
             process.stdout.write("\x1b[?25h\x1b[?1049l");
+
+            // Guarded: restoreTerminal runs twice, and a second pop would take someone else's title off the stack.
+            if (titlePushed) {
+                titlePushed = false;
+
+                process.stdout.write("\x1b[23;0t");
+            }
         } catch {
             //
         }
@@ -149,7 +157,9 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
     process.on("exit", exitHandler);
 
     if (title) {
-        process.stdout.write(`\x1b]0;${title}\x07`);
+        process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
+
+        titlePushed = true;
     }
 
     process.stdout.write("\x1b[?1049h\x1b[?25l");

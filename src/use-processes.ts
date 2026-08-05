@@ -1,15 +1,7 @@
 import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
-import {
-    CONTENT_BORDER,
-    CONTENT_PADDING,
-    formatTimestamp,
-    SCROLLBAR_WIDTH,
-    sidebarWidth,
-    systemMsg,
-    TIMESTAMP_WIDTH,
-} from "./util.js";
+import { childColumns, formatTimestamp, systemMsg } from "./util.js";
 
 const hasNotifySend =
     process.platform === "linux" &&
@@ -110,15 +102,11 @@ export function useProcesses({
                     ...process.env,
                     FORCE_COLOR: "1",
                     COLUMNS: String(
-                        (stdout?.columns ?? 80) -
-                            sidebarWidth(
-                                commandDefs.map((c) => c.label),
-                                stdout?.columns ?? 80,
-                            ) -
-                            CONTENT_BORDER -
-                            CONTENT_PADDING -
-                            SCROLLBAR_WIDTH -
-                            (timestamps ? TIMESTAMP_WIDTH : 0),
+                        childColumns(
+                            commandDefs.map((c) => c.label),
+                            stdout?.columns ?? 80,
+                            timestamps,
+                        ),
                     ),
                 },
                 stdio: ["ignore", "pipe", "pipe"],

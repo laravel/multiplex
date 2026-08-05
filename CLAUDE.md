@@ -34,6 +34,7 @@ Always run build + test after changes.
 - **Process groups:** Children are spawned with `detached: true` and killed via `process.kill(-pid)` to ensure the entire process tree is cleaned up.
 - **Auto color selection** avoids duplicates by checking which palette colors are already assigned before falling back to cycling — matches the Laravel framework's `DevCommands.php` behavior.
 - **Sidebar width** is computed dynamically from label lengths, clamped between 15 and 40 characters.
+- **`COLUMNS` is the narrower of the two layouts.** Children get it once at spawn and it can't be updated, so one value has to serve both modes — toggling with `t` must not invalidate it, and respawning to resize would kill dev servers on a keystroke. `childColumns` errs narrow deliberately, because output wider than the pane is truncated and lost while narrower output only wraps early. Resizing the terminal leaves it stale; restarting a process with `r` re-reads the current width.
 - **Buffer trimming** uses a 1.5x threshold to avoid trimming on every line of output.
 - **Render batching** via `setTimeout(fn, 16)` to avoid excessive React re-renders from fast-arriving process output.
 - **Never highlight the whole buffer.** Search indexes the full buffer linearly but only highlights the visible window. Highlighting everything was quadratic — searching a full 10k-line stream buffer for a common letter blocked the event loop for ~38 seconds, which also swallowed the keystrokes that would have cancelled it.

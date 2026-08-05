@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { hexToRgb, sanitizeTitle, sidebarWidth } from "./util.js";
+import { childColumns, hexToRgb, sanitizeTitle, sidebarWidth } from "./util.js";
 
 describe("hexToRgb", () => {
     test("parses basic hex colors", () => {
@@ -18,6 +18,64 @@ describe("hexToRgb", () => {
 
     test("handles uppercase hex", () => {
         assert.deepEqual(hexToRgb("#FF00FF"), [255, 0, 255]);
+    });
+});
+
+describe("childColumns", () => {
+    const labels = ["server", "queue", "vite"];
+
+    test("uses the tabbed width, the narrower mode for normal labels", () => {
+        assert.equal(childColumns(labels, 120, false), 97);
+        assert.equal(childColumns(labels, 200, false), 165);
+        assert.equal(childColumns(labels, 80, false), 60);
+    });
+
+    test("leaves room for timestamps", () => {
+        assert.equal(childColumns(labels, 120, true), 97 - 9);
+    });
+
+    // The sidebar stops widening at 40 while the stream label prefix does not,
+    // so a long enough label makes stream the narrower mode.
+    test("switches to the stream width once the label is long enough", () => {
+        const long = ["x".repeat(45)];
+
+        assert.equal(childColumns(long, 200, false), 149);
+        assert.ok(
+            childColumns(long, 200, false) < 155,
+            "should not use tabbed",
+        );
+    });
+
+    // Regression: the inlined formula returned 0 at 20 columns and -10 at 10.
+    test("never goes below the floor on a tiny terminal", () => {
+        assert.equal(childColumns(labels, 20, false), 20);
+        assert.equal(childColumns(["a"], 10, false), 20);
+        assert.equal(childColumns(labels, 1, true), 20);
+    });
+
+    test("is never wider than either layout can display", () => {
+        for (const cols of [40, 80, 120, 200, 400]) {
+            for (const ls of [["a"], labels, ["x".repeat(45)]]) {
+                for (const ts of [false, true]) {
+                    const width = childColumns(ls, cols, ts);
+                    const maxLabelLen = Math.max(...ls.map((l) => l.length));
+                    const tsWidth = ts ? 9 : 0;
+                    const tabbed =
+                        cols - sidebarWidth(ls, cols) - 2 - 1 - 2 - tsWidth;
+                    const stream = cols - 1 - 2 - (maxLabelLen + 3) - tsWidth;
+                    const label = `cols=${cols} labels=${ls.length} ts=${ts}`;
+
+                    assert.ok(
+                        width <= Math.max(20, tabbed),
+                        `wider than tabbed: ${label}`,
+                    );
+                    assert.ok(
+                        width <= Math.max(20, stream),
+                        `wider than stream: ${label}`,
+                    );
+                }
+            }
+        }
     });
 });
 

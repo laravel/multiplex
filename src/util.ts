@@ -29,7 +29,50 @@ export function sidebarWidth(labels: string[], totalColumns: number): number {
 }
 
 export const MIN_TABS_LAYOUT_WIDTH = 80;
-export const TIMESTAMP_WIDTH = 9;
-export const CONTENT_BORDER = 2;
-export const CONTENT_PADDING = 1;
-export const SCROLLBAR_WIDTH = 2;
+
+const TIMESTAMP_WIDTH = 9;
+const CONTENT_BORDER = 2;
+const CONTENT_PADDING = 1;
+const SCROLLBAR_WIDTH = 2;
+const STREAM_PADDING = 1;
+// The "[", the "]" and the space that follow the label in stream mode.
+const STREAM_LABEL_EXTRA = 3;
+const MIN_CHILD_COLUMNS = 20;
+
+/**
+ * The width to advertise to children as COLUMNS. They get it once at spawn and
+ * it can never be updated, so it has to hold for both layouts — toggling with
+ * `t` must not invalidate it — which means taking whichever mode is narrower.
+ *
+ * Erring narrow is the point. Output wider than the pane is truncated by the
+ * renderer and lost silently; output narrower than it just wraps early and
+ * leaves a ragged right edge. Tabbed is the narrower mode for any sane label,
+ * but that is emergent from MAX_SIDEBAR_WIDTH rather than guaranteed: the
+ * sidebar stops widening at 40 while the stream label prefix keeps growing, so
+ * past a ~39 character label stream becomes the narrower one.
+ */
+export function childColumns(
+    labels: string[],
+    totalColumns: number,
+    timestamps: boolean,
+): number {
+    const timestampWidth = timestamps ? TIMESTAMP_WIDTH : 0;
+    const maxLabelLen = Math.max(...labels.map((l) => l.length));
+
+    const tabbed =
+        totalColumns -
+        sidebarWidth(labels, totalColumns) -
+        CONTENT_BORDER -
+        CONTENT_PADDING -
+        SCROLLBAR_WIDTH -
+        timestampWidth;
+
+    const stream =
+        totalColumns -
+        STREAM_PADDING -
+        SCROLLBAR_WIDTH -
+        (maxLabelLen + STREAM_LABEL_EXTRA) -
+        timestampWidth;
+
+    return Math.max(MIN_CHILD_COLUMNS, Math.min(tabbed, stream));
+}

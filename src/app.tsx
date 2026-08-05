@@ -5,11 +5,7 @@ import { highlightLine, indexMatches } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
-import {
-    hexToRgb,
-    MIN_TABS_LAYOUT_WIDTH,
-    sidebarWidth,
-} from "./util.js";
+import { hexToRgb, MIN_TABS_LAYOUT_WIDTH, sidebarWidth } from "./util.js";
 
 const SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 const SPAWN_SPINNER_MS = 2000;
@@ -72,7 +68,7 @@ export function App({
     const [filterMode, setFilterMode] = useState(false);
     const [hiddenProcs, setHiddenProcs] = useState<Set<number>>(new Set());
 
-    const outputHeight = streamMode ? rows - 2 : rows - 4;
+    const outputHeight = streamMode ? rows - 4 : rows - 6;
 
     const {
         scrollOffset,

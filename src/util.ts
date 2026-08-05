@@ -60,8 +60,8 @@ const MIN_CHILD_COLUMNS = 20;
 
 /**
  * The width to advertise to children as COLUMNS. They get it once at spawn and
- * it can never be updated, so it has to hold for both layouts — toggling with
- * `t` must not invalidate it — which means taking whichever mode is narrower.
+ * it can never be updated, so it has to hold for both layouts — switching mode
+ * with `s` or `t` must not invalidate it — so we take whichever mode is narrower.
  *
  * Erring narrow is the point. Output wider than the pane is truncated by the
  * renderer and lost silently; output narrower than it just wraps early and

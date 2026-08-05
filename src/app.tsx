@@ -268,7 +268,7 @@ export function App({
                     ["r", "restart"],
                     ["c", "clear"],
                     ["/", "search"],
-                    ["t", "stream"],
+                    ["s", "stream"],
                     ["q", "quit"],
                 ];
             }
@@ -279,7 +279,7 @@ export function App({
                     ["tab", "tabs"],
                     ["c", "clear"],
                     ["/", "search"],
-                    ["t", "stream"],
+                    ["s", "stream"],
                     ["q", "quit"],
                 ];
             }
@@ -438,8 +438,16 @@ export function App({
             return;
         }
 
-        if (input === "t") {
-            setStreamMode((m) => !m);
+        if (input === "s" && !streamMode) {
+            setStreamMode(true);
+            setCurrentMatch(0);
+            resetScroll();
+
+            return;
+        }
+
+        if (input === "t" && streamMode) {
+            setStreamMode(false);
             setCurrentMatch(0);
             resetScroll();
 

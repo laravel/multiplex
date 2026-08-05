@@ -134,14 +134,15 @@ Use `--no-restart` to disable auto-restart for one-shot commands like builds or 
 
 | Key | Action |
 | --- | --- |
-| `t` | Toggle between tabbed and stream mode |
+| `s` | Switch to stream mode |
+| `t` | Switch to tabbed mode |
 | `r` | Restart the selected process |
 | `c` | Clear output (current tab or stream) |
 | `f` | Filter which commands appear in the stream |
 | `/` | Open search |
 | `q` | Quit |
 
-`r`, `Tab` and `Left`/`Right` apply to tabbed mode; `f` applies to stream mode. In filter mode, `1`-`9` toggle each command on and off and `f` or `Esc` closes it — you can always leave at least one command visible.
+`s`, `r`, `Tab` and `Left`/`Right` apply to tabbed mode; `t` and `f` apply to stream mode. Pressing the key for the mode you are already in does nothing. In filter mode, `1`-`9` toggle each command on and off and `f` or `Esc` closes it — you can always leave at least one command visible.
 
 ### Search
 

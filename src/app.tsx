@@ -5,7 +5,12 @@ import { highlightSearch } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
-import { formatTimestamp, hexToRgb, sidebarWidth } from "./util.js";
+import {
+    MIN_TABS_LAYOUT_WIDTH,
+    formatTimestamp,
+    hexToRgb,
+    sidebarWidth,
+} from "./util.js";
 
 const SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 const SPAWN_SPINNER_MS = 2000;
@@ -57,7 +62,9 @@ export function App({
     const [rows, setRows] = useState(stdout?.rows ?? 24);
     const [cols, setCols] = useState(stdout?.columns ?? 80);
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [streamMode, setStreamMode] = useState(initialStreamMode);
+    const [streamMode, setStreamMode] = useState(
+        initialStreamMode || (stdout?.columns ?? 80) < MIN_TABS_LAYOUT_WIDTH,
+    );
     const [searchInputMode, setSearchInputMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentMatch, setCurrentMatch] = useState(0);

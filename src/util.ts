@@ -23,6 +23,7 @@ export function sidebarWidth(labels: string[], totalColumns: number): number {
     );
 }
 
+export const MIN_TABS_LAYOUT_WIDTH = 80;
 export const TIMESTAMP_WIDTH = 9;
 export const CONTENT_BORDER = 2;
 export const CONTENT_PADDING = 1;

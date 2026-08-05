@@ -1,17 +1,15 @@
-name: CI
+name: Publish
 
 on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
-
-permissions:
-    contents: read
+    release:
+        types: [released]
 
 jobs:
-    check:
+    publish:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write # Required for OIDC trusted publishing
         steps:
             - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
               with:
@@ -21,7 +19,8 @@ jobs:
               with:
                   node-version: 24
                   cache: pnpm
+                  registry-url: https://registry.npmjs.org
             - run: pnpm install --frozen-lockfile
-            - run: pnpm run lint
             - run: pnpm run build
             - run: pnpm test
+            - run: pnpm publish --no-git-checks

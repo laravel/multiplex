@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from "node:os";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { render } from "ink";
 import { App } from "./app.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
@@ -32,8 +32,8 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
     const parts = value.split(",");
 
     if (parts.length < 2) {
-        throw new Error(
-            `Invalid format: "${value}". Expected: label,command or label,#color,command`,
+        throw new InvalidArgumentError(
+            "Expected label,command or label,#color,command",
         );
     }
 
@@ -44,13 +44,18 @@ function parseCommandDef(value: string, previous: CommandDef[]): CommandDef[] {
 
     if (parts[1].startsWith("#")) {
         if (parts.length < 3) {
-            throw new Error(
-                `Invalid format: "${value}". Color specified but no command found.`,
+            throw new InvalidArgumentError(
+                `The color ${parts[1]} is set but no command follows it.`,
             );
         }
 
-        const validHex = /^#[0-9a-fA-F]{6}$/.test(parts[1]);
-        color = validHex ? parts[1] : getNextColor(previous);
+        if (!/^#[0-9a-fA-F]{6}$/.test(parts[1])) {
+            throw new InvalidArgumentError(
+                `"${parts[1]}" is not a valid color. Expected a 6-digit hex color such as #93c5fd.`,
+            );
+        }
+
+        color = parts[1];
         cmdStr = parts.slice(2).join(",");
     } else {
         color = getNextColor(previous);
@@ -64,7 +69,7 @@ function parsePositiveInt(value: string): number {
     const n = parseInt(value, 10);
 
     if (Number.isNaN(n) || n <= 0) {
-        throw new Error(`"${value}" is not a positive integer.`);
+        throw new InvalidArgumentError(`"${value}" is not a positive integer.`);
     }
 
     return n;

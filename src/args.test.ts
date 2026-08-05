@@ -117,7 +117,7 @@ describe("normalizeCommands", () => {
         );
     });
 
-    test("keeps explicit colors", () => {
+    test("keeps explicit colors, lowercased", () => {
         const defs = normalizeCommands([
             { label: "a", command: "echo a", color: "#fb7185" },
             { label: "b", command: "echo b", color: "#86EFAC" },
@@ -125,7 +125,7 @@ describe("normalizeCommands", () => {
 
         assert.deepEqual(
             defs.map((d) => d.color),
-            ["#fb7185", "#86EFAC"],
+            ["#fb7185", "#86efac"],
         );
     });
 
@@ -134,7 +134,11 @@ describe("normalizeCommands", () => {
     test("auto-assignment avoids explicit colors anywhere in the list", () => {
         const defs = normalizeCommands([
             { label: "a", command: "echo a" },
-            { label: "b", command: "echo b", color: DEFAULT_COLORS[1] },
+            {
+                label: "b",
+                command: "echo b",
+                color: DEFAULT_COLORS[1].toUpperCase(),
+            },
             { label: "c", command: "echo c" },
         ]);
 

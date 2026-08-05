@@ -54,7 +54,9 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
     }
 
     const used = new Set(
-        commands.map((c) => c.color).filter((c): c is string => Boolean(c)),
+        commands
+            .map((c) => c.color?.toLowerCase())
+            .filter((c): c is string => Boolean(c)),
     );
 
     let reused = 0;
@@ -70,14 +72,16 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
             );
         }
 
-        if (cmd.color !== undefined && !HEX_COLOR.test(cmd.color)) {
+        const explicit = cmd.color?.toLowerCase();
+
+        if (explicit !== undefined && !HEX_COLOR.test(explicit)) {
             throw new Error(
                 `"${cmd.color}" is not a valid color for "${cmd.label}". Expected a 6-digit hex color such as #93c5fd.`,
             );
         }
 
-        if (cmd.color) {
-            return { label: cmd.label, color: cmd.color, command: cmd.command };
+        if (explicit) {
+            return { label: cmd.label, color: explicit, command: cmd.command };
         }
 
         const available = DEFAULT_COLORS.filter((c) => !used.has(c));

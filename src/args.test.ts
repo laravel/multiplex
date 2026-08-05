@@ -6,10 +6,10 @@ import {
     parseCommandDef,
     parsePositiveInt,
 } from "./args.js";
-import type { CommandDef } from "./types.js";
+import type { CommandInput } from "./types.js";
 
 const parse = (...values: string[]) =>
-    values.reduce<CommandDef[]>((acc, v) => parseCommandDef(v, acc), []);
+    values.reduce<CommandInput[]>((acc, v) => parseCommandDef(v, acc), []);
 
 const invalid = (value: string) =>
     assert.throws(() => parseCommandDef(value, []), {
@@ -21,7 +21,6 @@ describe("parseCommandDef", () => {
         assert.deepEqual(parse("server,php artisan serve"), [
             {
                 label: "server",
-                color: DEFAULT_COLORS[0],
                 command: "php artisan serve",
             },
         ]);
@@ -63,35 +62,11 @@ describe("parseCommandDef", () => {
         );
     });
 
-    test("auto-assigned colors do not repeat", () => {
-        const colors = parse(
-            ...DEFAULT_COLORS.map((_, i) => `cmd${i},echo ${i}`),
-        ).map((d) => d.color);
+    test("leaves the color unset unless it was given explicitly", () => {
+        const defs = parse("a,echo a", `b,${DEFAULT_COLORS[2]},echo b`);
 
-        assert.deepEqual(colors, DEFAULT_COLORS);
-        assert.equal(new Set(colors).size, DEFAULT_COLORS.length);
-    });
-
-    test("auto-assignment skips colors already taken explicitly", () => {
-        const defs = parse(`a,${DEFAULT_COLORS[0]},echo a`, "b,echo b");
-
-        assert.equal(defs[1].color, DEFAULT_COLORS[1]);
-    });
-
-    test("keeps assigning palette colors past the end of the palette", () => {
-        const defs = parse(
-            ...Array.from(
-                { length: DEFAULT_COLORS.length + 3 },
-                (_, i) => `cmd${i},echo ${i}`,
-            ),
-        );
-
-        for (const def of defs) {
-            assert.ok(
-                DEFAULT_COLORS.includes(def.color),
-                `${def.color} is not a palette color`,
-            );
-        }
+        assert.equal(defs[0].color, undefined);
+        assert.equal(defs[1].color, DEFAULT_COLORS[2]);
     });
 
     test("every palette color is a 6-digit hex", () => {
@@ -177,23 +152,44 @@ describe("normalizeCommands", () => {
             })),
         );
 
+        assert.deepEqual(
+            defs.map((d) => d.color),
+            DEFAULT_COLORS,
+        );
         assert.equal(new Set(defs.map((d) => d.color)).size, defs.length);
     });
 
-    test("keeps assigning palette colors past the end of the palette", () => {
-        const defs = normalizeCommands(
-            Array.from({ length: DEFAULT_COLORS.length + 3 }, (_, i) => ({
-                label: `cmd${i}`,
-                command: `echo ${i}`,
-            })),
+    test("cycles the palette deterministically past its end", () => {
+        const defs = Array.from({ length: 3 }, () =>
+            normalizeCommands(
+                Array.from({ length: DEFAULT_COLORS.length + 3 }, (_, i) => ({
+                    label: `cmd${i}`,
+                    command: `echo ${i}`,
+                })),
+            ).map((d) => d.color),
         );
 
-        for (const def of defs) {
-            assert.ok(
-                DEFAULT_COLORS.includes(def.color),
-                `${def.color} is not a palette color`,
-            );
+        for (const colors of defs) {
+            assert.deepEqual(colors, [
+                ...DEFAULT_COLORS,
+                ...DEFAULT_COLORS.slice(0, 3),
+            ]);
         }
+    });
+
+    test("counts reuse from where the palette runs out", () => {
+        const defs = normalizeCommands([
+            { label: "e", color: "#010203", command: "x" },
+            ...Array.from({ length: 9 }, (_, i) => ({
+                label: `a${i}`,
+                command: "x",
+            })),
+        ]);
+
+        assert.deepEqual(
+            defs.map((d) => d.color),
+            ["#010203", ...DEFAULT_COLORS, ...DEFAULT_COLORS.slice(0, 3)],
+        );
     });
 
     test("rejects an empty list", () => {

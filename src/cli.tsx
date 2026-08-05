@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { parseCommandDef, parsePositiveInt } from "./args.js";
 import { multiplex } from "./multiplex.js";
-import type { CommandDef } from "./types.js";
+import type { CommandInput } from "./types.js";
 
 const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
@@ -33,7 +33,7 @@ const program = new Command()
         "<commands...>",
         "commands as label,command or label,#color,command",
         parseCommandDef,
-        [] as CommandDef[],
+        [] as CommandInput[],
     )
     .configureHelp({
         formatHelp(cmd, helper) {
@@ -94,11 +94,11 @@ const opts = program.opts<{
     restart: boolean;
     title?: string;
 }>();
-const commandDefs = program.processedArgs[0] as CommandDef[];
+const commands = program.processedArgs[0] as CommandInput[];
 
 try {
     const code = await multiplex({
-        commands: commandDefs,
+        commands,
         cwd: opts.cwd,
         stream: opts.stream,
         bufferSize: opts.bufferSize,

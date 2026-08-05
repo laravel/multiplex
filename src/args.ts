@@ -12,22 +12,10 @@ export const DEFAULT_COLORS = [
     "#fcd34d",
 ];
 
-let colorCount = 0;
-
-function nextColor(used: Set<string>): string {
-    const available = DEFAULT_COLORS.filter((c) => !used.has(c));
-
-    if (available.length > 0) {
-        return available[0];
-    }
-
-    return DEFAULT_COLORS[colorCount++ % DEFAULT_COLORS.length];
-}
-
 export function parseCommandDef(
     value: string,
-    previous: CommandDef[],
-): CommandDef[] {
+    previous: CommandInput[],
+): CommandInput[] {
     const parts = value.split(",");
 
     if (parts.length < 2) {
@@ -37,9 +25,6 @@ export function parseCommandDef(
     }
 
     const label = parts[0];
-
-    let color: string;
-    let cmdStr: string;
 
     if (parts[1].startsWith("#")) {
         if (parts.length < 3) {
@@ -54,14 +39,13 @@ export function parseCommandDef(
             );
         }
 
-        color = parts[1];
-        cmdStr = parts.slice(2).join(",");
-    } else {
-        color = nextColor(new Set(previous.map((c) => c.color)));
-        cmdStr = parts.slice(1).join(",");
+        return [
+            ...previous,
+            { label, color: parts[1], command: parts.slice(2).join(",") },
+        ];
     }
 
-    return [...previous, { label, color, command: cmdStr }];
+    return [...previous, { label, command: parts.slice(1).join(",") }];
 }
 
 export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
@@ -72,6 +56,8 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
     const used = new Set(
         commands.map((c) => c.color).filter((c): c is string => Boolean(c)),
     );
+
+    let reused = 0;
 
     return commands.map((cmd, i) => {
         if (!cmd.label) {
@@ -94,7 +80,12 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
             return { label: cmd.label, color: cmd.color, command: cmd.command };
         }
 
-        const color = nextColor(used);
+        const available = DEFAULT_COLORS.filter((c) => !used.has(c));
+        const color =
+            available.length > 0
+                ? available[0]
+                : DEFAULT_COLORS[reused++ % DEFAULT_COLORS.length];
+
         used.add(color);
 
         return { label: cmd.label, color, command: cmd.command };

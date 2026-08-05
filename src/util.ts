@@ -30,6 +30,25 @@ export function sidebarWidth(labels: string[], totalColumns: number): number {
 
 export const MIN_TABS_LAYOUT_WIDTH = 80;
 
+const MIN_OUTPUT_LINES = 4;
+const STREAM_CHROME = 4;
+const TABBED_CHROME = 6;
+const SIDEBAR_CHROME = 4;
+
+export const MIN_ROWS = STREAM_CHROME + MIN_OUTPUT_LINES;
+
+/**
+ * Rows needed before the tabbed layout is worth using. The sidebar renders one
+ * row per command and silently drops the overflow, so it has to fit every label
+ * as well as leave the content pane something to show.
+ */
+export function minTabsLayoutHeight(commandCount: number): number {
+    return Math.max(
+        commandCount + SIDEBAR_CHROME,
+        TABBED_CHROME + MIN_OUTPUT_LINES,
+    );
+}
+
 const TIMESTAMP_WIDTH = 9;
 const CONTENT_BORDER = 2;
 const CONTENT_PADDING = 1;

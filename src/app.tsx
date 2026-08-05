@@ -5,7 +5,12 @@ import { highlightLine, indexMatches } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
-import { hexToRgb, MIN_TABS_LAYOUT_WIDTH, sidebarWidth } from "./util.js";
+import {
+    hexToRgb,
+    MIN_TABS_LAYOUT_WIDTH,
+    minTabsLayoutHeight,
+    sidebarWidth,
+} from "./util.js";
 
 const SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 const SPAWN_SPINNER_MS = 2000;
@@ -58,7 +63,9 @@ export function App({
     const [cols, setCols] = useState(stdout?.columns ?? 80);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [streamMode, setStreamMode] = useState(
-        initialStreamMode || (stdout?.columns ?? 80) < MIN_TABS_LAYOUT_WIDTH,
+        initialStreamMode ||
+            (stdout?.columns ?? 80) < MIN_TABS_LAYOUT_WIDTH ||
+            (stdout?.rows ?? 24) < minTabsLayoutHeight(commandDefs.length),
     );
     const [searchInputMode, setSearchInputMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -68,7 +75,7 @@ export function App({
     const [filterMode, setFilterMode] = useState(false);
     const [hiddenProcs, setHiddenProcs] = useState<Set<number>>(new Set());
 
-    const outputHeight = streamMode ? rows - 4 : rows - 6;
+    const outputHeight = Math.max(0, streamMode ? rows - 4 : rows - 6);
 
     const {
         scrollOffset,

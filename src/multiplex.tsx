@@ -5,7 +5,7 @@ import { render } from "ink";
 import { App } from "./app.js";
 import { normalizeCommands } from "./args.js";
 import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
-import { hexToRgb, sanitizeTitle } from "./util.js";
+import { hexToRgb, MIN_ROWS, sanitizeTitle } from "./util.js";
 
 export { DEFAULT_COLORS } from "./args.js";
 export type { CommandInput, MultiplexOptions } from "./types.js";
@@ -40,6 +40,14 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
 
         throw new Error(
             `multiplex needs an interactive terminal, but ${stream} is not a TTY. Run it directly rather than through a pipe or redirect.`,
+        );
+    }
+
+    const rows = process.stdout.rows ?? 0;
+
+    if (rows < MIN_ROWS) {
+        throw new Error(
+            `multiplex needs at least ${MIN_ROWS} terminal rows, but this terminal has ${rows}. Make the window taller and try again.`,
         );
     }
 

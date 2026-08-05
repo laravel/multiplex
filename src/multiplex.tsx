@@ -5,7 +5,7 @@ import { render } from "ink";
 import { App } from "./app.js";
 import { normalizeCommands } from "./args.js";
 import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
-import { formatTimestamp, hexToRgb, sanitizeTitle } from "./util.js";
+import { hexToRgb, sanitizeTitle } from "./util.js";
 
 export { DEFAULT_COLORS } from "./args.js";
 export type { CommandInput, MultiplexOptions } from "./types.js";
@@ -91,10 +91,9 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
                 const cmd = commandDefs[sl.cmdIndex];
                 const [r, g, b] = hexToRgb(cmd.color);
                 const padding = " ".repeat(maxLabelLen - cmd.label.length);
-                const ts = timestamps ? formatTimestamp(sl.time) : "";
 
                 process.stdout.write(
-                    `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
+                    `${sl.ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
                 );
             }
         } catch {

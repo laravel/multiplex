@@ -6,7 +6,6 @@ import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import {
-    formatTimestamp,
     hexToRgb,
     MIN_TABS_LAYOUT_WIDTH,
     sidebarWidth,
@@ -551,9 +550,8 @@ export function App({
                 const cmd = commandDefs[sl.cmdIndex];
                 const [r, g, b] = hexToRgb(cmd.color);
                 const padding = " ".repeat(maxLabelLen - cmd.label.length);
-                const ts = timestamps ? formatTimestamp(sl.time) : "";
 
-                return `${ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
+                return `${sl.ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
             });
     }, [
         renderTick,
@@ -561,7 +559,6 @@ export function App({
         selectedIndex,
         hiddenProcs,
         commandDefs,
-        timestamps,
         maxLabelLen,
         outputBuffersRef,
         streamLinesRef,

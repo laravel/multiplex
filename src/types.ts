@@ -26,7 +26,7 @@ export type MultiplexOptions = {
 export type StreamLine = {
     cmdIndex: number;
     text: string;
-    time: Date;
+    ts: string;
 };
 
 export type OutputRef = {

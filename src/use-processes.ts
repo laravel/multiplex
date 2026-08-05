@@ -150,7 +150,7 @@ export function useProcesses({
                     streamLinesRef.current.push({
                         cmdIndex: i,
                         text: line,
-                        time: now,
+                        ts: tsPrefix,
                     });
 
                     if (timestamps) {
@@ -180,7 +180,7 @@ export function useProcesses({
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: errorMsg,
-                    time: now,
+                    ts: tsPrefix,
                 });
 
                 setFailedProcs((prev) => new Set(prev).add(i));
@@ -206,14 +206,14 @@ export function useProcesses({
                 streamLinesRef.current.push({
                     cmdIndex: i,
                     text: exitMsg,
-                    time: now,
+                    ts: tsPrefix,
                 });
 
                 if (partialsRef.current[i].trim()) {
                     streamLinesRef.current.push({
                         cmdIndex: i,
                         text: partialsRef.current[i],
-                        time: new Date(),
+                        ts: tsPrefix,
                     });
                     partialsRef.current[i] = "";
                 }
@@ -237,7 +237,7 @@ export function useProcesses({
                         streamLinesRef.current.push({
                             cmdIndex: i,
                             text: restartMsg,
-                            time: now,
+                            ts: restartTsPrefix,
                         });
 
                         pendingRestartsRef.current.add(i);
@@ -322,7 +322,7 @@ export function useProcesses({
             streamLinesRef.current.push({
                 cmdIndex: i,
                 text: restartMsg,
-                time: now,
+                ts: tsPrefix,
             });
 
             setFailedProcs((prev) => {
@@ -390,7 +390,7 @@ export function useProcesses({
             streamLinesRef.current.push({
                 cmdIndex: index,
                 text: clearMsg,
-                time: now,
+                ts: tsPrefix,
             });
         },
         [timestamps],

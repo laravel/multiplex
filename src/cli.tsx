@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { existsSync, statSync } from "node:fs";
 import { constants } from "node:os";
+import { resolve } from "node:path";
 import { Command, InvalidArgumentError } from "commander";
 import { render } from "ink";
 import { App } from "./app.js";
@@ -167,6 +169,24 @@ const opts = program.opts<{
 }>();
 const commandDefs = program.processedArgs[0] as CommandDef[];
 
+if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    const stream = process.stdin.isTTY ? "stdout" : "stdin";
+
+    program.error(
+        `error: multiplex needs an interactive terminal, but ${stream} is not a TTY. Run it directly rather than through a pipe or redirect.`,
+    );
+}
+
+const cwd = resolve(opts.cwd);
+
+if (!existsSync(cwd)) {
+    program.error(`error: --cwd path does not exist: ${cwd}`);
+}
+
+if (!statSync(cwd).isDirectory()) {
+    program.error(`error: --cwd path is not a directory: ${cwd}`);
+}
+
 if (opts.title) {
     process.stdout.write(`\x1b]0;${opts.title}\x07`);
 }
@@ -265,7 +285,7 @@ try {
     instance = render(
         <App
             commandDefs={commandDefs}
-            cwd={opts.cwd}
+            cwd={cwd}
             initialStreamMode={opts.stream}
             bufferSize={opts.bufferSize}
             streamBufferSize={opts.streamBufferSize}

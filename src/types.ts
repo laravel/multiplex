@@ -6,6 +6,23 @@ export type CommandDef = {
     command: string;
 };
 
+export type CommandInput = {
+    label: string;
+    command: string;
+    color?: string;
+};
+
+export type MultiplexOptions = {
+    commands: CommandInput[];
+    cwd?: string;
+    stream?: boolean;
+    timestamps?: boolean;
+    restart?: boolean;
+    bufferSize?: number;
+    streamBufferSize?: number;
+    title?: string;
+};
+
 export type StreamLine = {
     cmdIndex: number;
     text: string;

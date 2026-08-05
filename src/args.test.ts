@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { DEFAULT_COLORS, parseCommandDef, parsePositiveInt } from "./args.js";
+import {
+    DEFAULT_COLORS,
+    normalizeCommands,
+    parseCommandDef,
+    parsePositiveInt,
+} from "./args.js";
 import type { CommandDef } from "./types.js";
 
 const parse = (...values: string[]) =>
@@ -112,6 +117,108 @@ describe("parseCommandDef", () => {
         invalid("a,#3 tasks,echo hi");
         invalid("a,#93c5fdd,echo hi");
         invalid("a,#,echo hi");
+    });
+});
+
+describe("normalizeCommands", () => {
+    test("assigns colors to commands that omit them", () => {
+        assert.deepEqual(
+            normalizeCommands([
+                { label: "server", command: "php artisan serve" },
+                { label: "queue", command: "php artisan queue:listen" },
+            ]),
+            [
+                {
+                    label: "server",
+                    color: DEFAULT_COLORS[0],
+                    command: "php artisan serve",
+                },
+                {
+                    label: "queue",
+                    color: DEFAULT_COLORS[1],
+                    command: "php artisan queue:listen",
+                },
+            ],
+        );
+    });
+
+    test("keeps explicit colors", () => {
+        const defs = normalizeCommands([
+            { label: "a", command: "echo a", color: "#fb7185" },
+            { label: "b", command: "echo b", color: "#86EFAC" },
+        ]);
+
+        assert.deepEqual(
+            defs.map((d) => d.color),
+            ["#fb7185", "#86EFAC"],
+        );
+    });
+
+    // Unlike the CLI, which parses left to right, we can see every explicit
+    // color up front, so auto-assignment avoids the ones taken later too.
+    test("auto-assignment avoids explicit colors anywhere in the list", () => {
+        const defs = normalizeCommands([
+            { label: "a", command: "echo a" },
+            { label: "b", command: "echo b", color: DEFAULT_COLORS[1] },
+            { label: "c", command: "echo c" },
+        ]);
+
+        assert.deepEqual(
+            defs.map((d) => d.color),
+            [DEFAULT_COLORS[0], DEFAULT_COLORS[1], DEFAULT_COLORS[2]],
+        );
+    });
+
+    test("does not repeat auto-assigned colors", () => {
+        const defs = normalizeCommands(
+            DEFAULT_COLORS.map((_, i) => ({
+                label: `cmd${i}`,
+                command: `echo ${i}`,
+            })),
+        );
+
+        assert.equal(new Set(defs.map((d) => d.color)).size, defs.length);
+    });
+
+    test("keeps assigning palette colors past the end of the palette", () => {
+        const defs = normalizeCommands(
+            Array.from({ length: DEFAULT_COLORS.length + 3 }, (_, i) => ({
+                label: `cmd${i}`,
+                command: `echo ${i}`,
+            })),
+        );
+
+        for (const def of defs) {
+            assert.ok(
+                DEFAULT_COLORS.includes(def.color),
+                `${def.color} is not a palette color`,
+            );
+        }
+    });
+
+    test("rejects an empty list", () => {
+        assert.throws(() => normalizeCommands([]), /at least one command/);
+    });
+
+    test("rejects a missing label or command", () => {
+        assert.throws(
+            () => normalizeCommands([{ label: "", command: "echo hi" }]),
+            /missing a label/,
+        );
+
+        assert.throws(
+            () => normalizeCommands([{ label: "a", command: "" }]),
+            /missing a command/,
+        );
+    });
+
+    test("rejects a malformed color", () => {
+        for (const color of ["#fff", "#zzzzzz", "#93c5fdd", "#", "red"]) {
+            assert.throws(
+                () => normalizeCommands([{ label: "a", command: "x", color }]),
+                /is not a valid color/,
+            );
+        }
     });
 });
 

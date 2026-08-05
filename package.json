@@ -31,6 +31,15 @@
     "bin": {
         "multiplex": "dist/cli.js"
     },
+    "main": "dist/multiplex.js",
+    "types": "dist/multiplex.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/multiplex.d.ts",
+            "default": "./dist/multiplex.js"
+        },
+        "./package.json": "./package.json"
+    },
     "files": [
         "dist"
     ],

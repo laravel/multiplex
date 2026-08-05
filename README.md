@@ -71,6 +71,41 @@ multiplex --no-restart 'build,pnpm run build'
 | `--buffer-size <lines>` | Max lines kept per command buffer | `2000` |
 | `--stream-buffer-size <lines>` | Max lines kept in stream buffer | `10000` |
 
+## Programmatic API
+
+The package also exports `multiplex()`, so you can start the TUI from your own script instead of going through the CLI:
+
+```ts
+import { multiplex } from "@laravel/multiplex";
+
+const code = await multiplex({
+    commands: [
+        { label: "server", command: "php artisan serve" },
+        { label: "queue", color: "#fb7185", command: "php artisan queue:listen" },
+    ],
+    stream: true,
+});
+
+process.exit(code);
+```
+
+`multiplex()` takes over the terminal for the duration of the call: it enters the alternate screen, installs its own `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT` handlers, and renders the TUI. It resolves with the same exit code the CLI would have used — `0` normally, `1` if rendering failed. By then the terminal is restored, every child process is dead, the buffered output has been flushed to scrollback, and the signal handlers it installed have been removed, so the calling process is free to carry on. The same requirements apply as for the CLI: both stdin and stdout must be a TTY.
+
+Options are validated before anything is written to the terminal, so an invalid option throws with the screen untouched.
+
+| Option | Type | Description | Default |
+| --- | --- | --- | --- |
+| `commands` | `{ label, command, color? }[]` | Required, at least one. `color` is an optional 6-digit hex value | |
+| `title` | `string` | Set the terminal tab title | |
+| `cwd` | `string` | Set the working directory (must exist) | `process.cwd()` |
+| `stream` | `boolean` | Start in stream mode (interleaved output) | `false` |
+| `timestamps` | `boolean` | Display timestamps on each output line | `false` |
+| `restart` | `boolean` | Auto-restart on crash | `true` |
+| `bufferSize` | `number` | Max lines kept per command buffer | `2000` |
+| `streamBufferSize` | `number` | Max lines kept in stream buffer | `10000` |
+
+Commands that omit a color are assigned one from the built-in palette (also exported as `DEFAULT_COLORS`), avoiding colors used elsewhere in the list.
+
 ## Auto-Restart
 
 Processes that crash (exit with a non-zero code) are automatically restarted after a 1-second delay. If a process fails 5 times in a row, it stops restarting and is marked as failed in the sidebar. A manual restart with `r` resets the counter.

@@ -10,7 +10,7 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "types": ["node"],
-        "declaration": false
+        "declaration": true
     },
     "include": ["src"],
     "exclude": ["src/*.test.ts"]

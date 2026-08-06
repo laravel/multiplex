@@ -14,6 +14,16 @@ const program = new Command()
     .option("--cwd <path>", "Set the working directory", process.cwd())
     .option("-s, --stream", "Start in stream mode", false)
     .option(
+        "-i, --inline",
+        "Print output inline instead of rendering the TUI (the default when not a TTY)",
+        false,
+    )
+    .option(
+        "--json",
+        "Emit newline-delimited JSON events. Implies --inline",
+        false,
+    )
+    .option(
         "--buffer-size <lines>",
         "Set the max lines per command buffer",
         parsePositiveInt,
@@ -88,6 +98,8 @@ const program = new Command()
 const opts = program.opts<{
     cwd: string;
     stream: boolean;
+    inline: boolean;
+    json: boolean;
     bufferSize: number;
     streamBufferSize: number;
     timestamps: boolean;
@@ -100,6 +112,8 @@ try {
     const code = await multiplex({
         commands,
         cwd: opts.cwd,
+        inline: opts.inline,
+        json: opts.json,
         stream: opts.stream,
         bufferSize: opts.bufferSize,
         streamBufferSize: opts.streamBufferSize,

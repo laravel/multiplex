@@ -4,8 +4,14 @@ import { resolve } from "node:path";
 import { render } from "ink";
 import { App } from "./app.js";
 import { normalizeCommands } from "./args.js";
+import { runInline } from "./inline.js";
 import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
-import { hexToRgb, MIN_ROWS, sanitizeTitle } from "./util.js";
+import {
+    formatStreamLabel,
+    inlineChildColumns,
+    MIN_ROWS,
+    sanitizeTitle,
+} from "./util.js";
 
 export { DEFAULT_COLORS } from "./args.js";
 export type { CommandInput, MultiplexOptions } from "./types.js";
@@ -20,10 +26,56 @@ function positiveInt(value: number, name: string): number {
     return value;
 }
 
+function supportsColor(): boolean {
+    if (process.env.NO_COLOR) {
+        return false;
+    }
+
+    if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== "0") {
+        return true;
+    }
+
+    return Boolean(process.stdout.isTTY);
+}
+
 /**
- * Runs the TUI and resolves with an exit code once it has exited, the terminal
- * is restored and every child process is gone. Options are validated before we
- * touch the terminal, so a bad option throws with the screen untouched.
+ * Installs the teardown that has to survive a signal. `process.on("exit")` does
+ * not run when we are killed by one, and the children sit in their own process
+ * groups so they never see the terminal's own SIGHUP — without these, closing
+ * the window leaves every dev server running and holding its port.
+ */
+function installTeardown(shutdown: () => void, onExit: () => void) {
+    const handlers = SIGNALS.map((signal) => {
+        const handler = () => {
+            shutdown();
+            process.exit(128 + constants.signals[signal]);
+        };
+
+        process.on(signal, handler);
+
+        return [signal, handler] as const;
+    });
+
+    process.on("exit", onExit);
+
+    return () => {
+        for (const [signal, handler] of handlers) {
+            process.removeListener(signal, handler);
+        }
+
+        process.removeListener("exit", onExit);
+    };
+}
+
+/**
+ * Runs the commands and resolves with an exit code once everything has exited,
+ * the terminal is restored and every child process is gone. Options are
+ * validated before we touch the terminal, so a bad option throws with the screen
+ * untouched.
+ *
+ * Renders the TUI when the terminal can support it and falls back to inline
+ * output — every line printed as it arrives, no alternate screen, no input —
+ * when it cannot, so a pipe or a CI job gets usable output rather than an error.
  */
 export async function multiplex(options: MultiplexOptions): Promise<number> {
     const commandDefs = normalizeCommands(options.commands ?? []);
@@ -34,22 +86,9 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
     );
     const timestamps = options.timestamps ?? false;
     const title = options.title ? sanitizeTitle(options.title) : undefined;
-
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
-        const stream = process.stdin.isTTY ? "stdout" : "stdin";
-
-        throw new Error(
-            `multiplex needs an interactive terminal, but ${stream} is not a TTY. Run it directly rather than through a pipe or redirect.`,
-        );
-    }
-
-    const rows = process.stdout.rows ?? 0;
-
-    if (rows < MIN_ROWS) {
-        throw new Error(
-            `multiplex needs at least ${MIN_ROWS} terminal rows, but this terminal has ${rows}. Make the window taller and try again.`,
-        );
-    }
+    const json = options.json ?? false;
+    const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const inline = json || (options.inline ?? false) || !interactive;
 
     const cwd = resolve(options.cwd ?? process.cwd());
 
@@ -61,17 +100,12 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         throw new Error(`cwd path is not a directory: ${cwd}`);
     }
 
-    const outputRef: OutputRef = { current: [] };
     const procsRef: ProcsRef = { current: [] };
-
-    let instance: ReturnType<typeof render> | undefined;
-    let shuttingDown = false;
-    let titlePushed = false;
 
     function killAll() {
         for (const proc of procsRef.current) {
             try {
-                if (proc.pid) {
+                if (proc?.pid) {
                     process.kill(-proc.pid, "SIGKILL");
                 }
             } catch {
@@ -80,129 +114,184 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         }
     }
 
-    function restoreTerminal() {
-        try {
-            process.stdout.write("\x1b[?25h\x1b[?1049l");
+    return inline ? runInlineMode() : runTui();
 
-            // Guarded: restoreTerminal runs twice, and a second pop would take someone else's title off the stack.
-            if (titlePushed) {
-                titlePushed = false;
+    async function runInlineMode(): Promise<number> {
+        const color = !json && supportsColor();
+        const useTitle = title && !json && process.stdout.isTTY;
 
-                process.stdout.write("\x1b[23;0t");
+        let shuttingDown = false;
+
+        function shutdown() {
+            if (shuttingDown) {
+                return;
             }
-        } catch {
-            //
-        }
-    }
 
-    function flushOutput() {
-        if (outputRef.current.length === 0) {
-            return;
-        }
+            shuttingDown = true;
 
-        const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
+            killAll();
 
-        try {
-            for (const sl of outputRef.current) {
-                const cmd = commandDefs[sl.cmdIndex];
-                const [r, g, b] = hexToRgb(cmd.color);
-                const padding = " ".repeat(maxLabelLen - cmd.label.length);
-
-                process.stdout.write(
-                    `${sl.ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}\n`,
-                );
+            if (useTitle) {
+                try {
+                    process.stdout.write("\x1b[23;0t");
+                } catch {
+                    //
+                }
             }
-        } catch {
-            // The terminal can already be gone when we got here via SIGHUP.
-        }
-    }
-
-    /**
-     * Unmount first, so Ink's final frame and its raw-mode teardown happen while
-     * we still own the alternate screen, then leave the screen before flushing so
-     * the logs land in the real scrollback.
-     */
-    function shutdown() {
-        if (shuttingDown) {
-            return;
         }
 
-        shuttingDown = true;
+        const uninstall = installTeardown(shutdown, killAll);
+
+        if (useTitle) {
+            process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
+        }
 
         try {
-            instance?.unmount();
-        } catch {
-            //
-        }
+            const { done } = runInline({
+                commandDefs,
+                cwd,
+                timestamps,
+                autoRestart: options.restart ?? true,
+                json,
+                color,
+                columns: inlineChildColumns(
+                    commandDefs.map((c) => c.label),
+                    process.stdout.columns ?? 80,
+                    timestamps,
+                ),
+                procsRef,
+            });
 
-        killAll();
-        restoreTerminal();
-        flushOutput();
-    }
+            const code = await done;
 
-    // Signals terminate the process without running exit handlers, and the
-    // children sit in their own process groups so they never see the terminal's
-    // own SIGHUP. Without these, closing the terminal window leaves every dev
-    // server running and holding its port. A second signal mid-flush hits the
-    // shuttingDown guard and force-exits rather than printing twice.
-    const signalHandlers = SIGNALS.map((signal) => {
-        const handler = () => {
             shutdown();
-            process.exit(128 + constants.signals[signal]);
-        };
 
-        process.on(signal, handler);
+            return code;
+        } catch {
+            shutdown();
 
-        return [signal, handler] as const;
-    });
-
-    // Last resort for exits we did not route through shutdown().
-    const exitHandler = () => {
-        killAll();
-        restoreTerminal();
-    };
-
-    process.on("exit", exitHandler);
-
-    if (title) {
-        process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
-
-        titlePushed = true;
+            return 1;
+        } finally {
+            uninstall();
+        }
     }
 
-    process.stdout.write("\x1b[?1049h\x1b[?25l");
+    async function runTui(): Promise<number> {
+        const rows = process.stdout.rows ?? 0;
 
-    try {
-        instance = render(
-            <App
-                commandDefs={commandDefs}
-                cwd={cwd}
-                initialStreamMode={options.stream ?? false}
-                bufferSize={bufferSize}
-                streamBufferSize={streamBufferSize}
-                timestamps={timestamps}
-                autoRestart={options.restart ?? true}
-                title={title}
-                outputRef={outputRef}
-                procsRef={procsRef}
-            />,
-            { exitOnCtrlC: true },
-        );
-
-        await instance.waitUntilExit();
-
-        shutdown();
-
-        return 0;
-    } catch {
-        shutdown();
-
-        return 1;
-    } finally {
-        for (const [signal, handler] of signalHandlers) {
-            process.removeListener(signal, handler);
+        if (rows < MIN_ROWS) {
+            throw new Error(
+                `multiplex needs at least ${MIN_ROWS} terminal rows, but this terminal has ${rows}. Make the window taller and try again.`,
+            );
         }
 
-        process.removeListener("exit", exitHandler);
+        const outputRef: OutputRef = { current: [] };
+
+        let instance: ReturnType<typeof render> | undefined;
+        let shuttingDown = false;
+        let titlePushed = false;
+
+        function restoreTerminal() {
+            try {
+                process.stdout.write("\x1b[?25h\x1b[?1049l");
+
+                // Guarded: restoreTerminal runs twice, and a second pop would take someone else's title off the stack.
+                if (titlePushed) {
+                    titlePushed = false;
+
+                    process.stdout.write("\x1b[23;0t");
+                }
+            } catch {
+                //
+            }
+        }
+
+        function flushOutput() {
+            if (outputRef.current.length === 0) {
+                return;
+            }
+
+            const maxLabelLen = Math.max(
+                ...commandDefs.map((c) => c.label.length),
+            );
+
+            try {
+                for (const sl of outputRef.current) {
+                    const cmd = commandDefs[sl.cmdIndex];
+
+                    process.stdout.write(
+                        `${sl.ts}${formatStreamLabel(cmd.label, cmd.color, maxLabelLen, true)}${sl.text}\n`,
+                    );
+                }
+            } catch {
+                // The terminal can already be gone when we got here via SIGHUP.
+            }
+        }
+
+        /**
+         * Unmount first, so Ink's final frame and its raw-mode teardown happen
+         * while we still own the alternate screen, then leave the screen before
+         * flushing so the logs land in the real scrollback.
+         */
+        function shutdown() {
+            if (shuttingDown) {
+                return;
+            }
+
+            shuttingDown = true;
+
+            try {
+                instance?.unmount();
+            } catch {
+                //
+            }
+
+            killAll();
+            restoreTerminal();
+            flushOutput();
+        }
+
+        const uninstall = installTeardown(shutdown, () => {
+            killAll();
+            restoreTerminal();
+        });
+
+        if (title) {
+            process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
+
+            titlePushed = true;
+        }
+
+        process.stdout.write("\x1b[?1049h\x1b[?25l");
+
+        try {
+            instance = render(
+                <App
+                    commandDefs={commandDefs}
+                    cwd={cwd}
+                    initialStreamMode={options.stream ?? false}
+                    bufferSize={bufferSize}
+                    streamBufferSize={streamBufferSize}
+                    timestamps={timestamps}
+                    autoRestart={options.restart ?? true}
+                    title={title}
+                    outputRef={outputRef}
+                    procsRef={procsRef}
+                />,
+                { exitOnCtrlC: true },
+            );
+
+            await instance.waitUntilExit();
+
+            shutdown();
+
+            return 0;
+        } catch {
+            shutdown();
+
+            return 1;
+        } finally {
+            uninstall();
+        }
     }
 }

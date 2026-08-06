@@ -6,7 +6,7 @@ import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import {
-    hexToRgb,
+    formatStreamLabel,
     MIN_TABS_LAYOUT_WIDTH,
     minTabsLayoutHeight,
     sidebarWidth,
@@ -559,10 +559,8 @@ export function App({
             .filter((sl) => !hiddenProcs.has(sl.cmdIndex))
             .map((sl) => {
                 const cmd = commandDefs[sl.cmdIndex];
-                const [r, g, b] = hexToRgb(cmd.color);
-                const padding = " ".repeat(maxLabelLen - cmd.label.length);
 
-                return `${sl.ts}\x1b[1;38;2;${r};${g};${b}m${padding}${cmd.label}\x1b[0m\x1b[90m │ \x1b[0m${sl.text}`;
+                return `${sl.ts}${formatStreamLabel(cmd.label, cmd.color, maxLabelLen, true)}${sl.text}`;
             });
     }, [
         renderTick,

@@ -15,6 +15,13 @@ export type CommandInput = {
 export type MultiplexOptions = {
     commands: CommandInput[];
     cwd?: string;
+    /**
+     * Print output inline instead of rendering the TUI. Already the behaviour
+     * when stdin or stdout is not a TTY; this asks for it in a real terminal.
+     */
+    inline?: boolean;
+    /** NDJSON on stdout, one object per event. Implies inline. */
+    json?: boolean;
     stream?: boolean;
     timestamps?: boolean;
     restart?: boolean;

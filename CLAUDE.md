@@ -2,6 +2,14 @@
 
 Tabbed TUI for running multiple CLI commands simultaneously. Built with Ink (React for terminals), TypeScript, Commander.
 
+## Scope
+
+This is for the commands you run **while you are actively developing** — a dev server, a queue listener, a watcher, a build in watch mode — for the length of a working session, with you sitting in front of it.
+
+It is not a CI runner and not a process supervisor. It works fine in CI (inline mode exits with a real code, `--json` is parseable) and nothing should gratuitously break there, but CI is not what the defaults are tuned for. Neither is unattended operation: there is no daemonising, no log rotation, no restart policy worth the name, and buffers are capped for memory rather than kept for later.
+
+Weigh proposals against the working session. "What if this runs for three days" and "what if nobody is watching" are usually the wrong questions here; "what happens when I save a file and something crashes" is the right one.
+
 ## Commands
 
 - `pnpm run build` — TypeScript compile to `dist/`
@@ -15,9 +23,11 @@ Always run build + test after changes.
 ## Architecture
 
 - `cli.tsx` — CLI entry point. Parses argv with Commander, then hands off to `multiplex()` and exits with its code. Validation errors from `multiplex()` are reported through `program.error`.
-- `multiplex.tsx` — the package's programmatic entry point (`main`/`exports`), exporting `multiplex(options)`. Validates options, sets up alternate screen, renders `<App>`, and resolves with an exit code once everything is torn down. All teardown funnels through a single `shutdown()`, wired to normal exit, render failure, and SIGINT/SIGTERM/SIGHUP/SIGQUIT.
+- `multiplex.tsx` — the package's programmatic entry point (`main`/`exports`), exporting `multiplex(options)`. Validates options, then runs either `runTui()` or `runInlineMode()`. Each has its own `shutdown()`, wired to normal exit, failure, and SIGINT/SIGTERM/SIGHUP/SIGQUIT via the shared `installTeardown`.
 - `app.tsx` — Main React/Ink component. Sidebar + content panes, keyboard input handling, search overlay, stream/tab mode toggle.
-- `use-processes.ts` — Hook that spawns/manages child processes. Handles stdout/stderr buffering, auto-restart with 5-attempt limit, desktop notifications on permanent failure.
+- `supervisor.ts` — The process layer, with no React and no rendering in it: spawn, line splitting, restart accounting, auto-restart with a 5-attempt limit, and settle detection. Emits events; both front ends drive it.
+- `use-processes.ts` — Thin React wrapper over the supervisor. Turns its events into the TUI's per-command buffers, stream lines, `failedProcs` state and desktop notifications.
+- `inline.ts` — The non-TUI front end. Same supervisor, but each line is written to stdout/stderr as it arrives, or serialised as NDJSON when `json` is set. Resolves with an exit code when everything has settled.
 - `use-scroll.ts` — Hook for scroll state (offset tracking, page up/down, new-output indicator).
 - `search.ts` — ANSI-aware search in two phases: `indexMatches` counts and locates matches across the whole buffer, `highlightLine` highlights a single line. Strips escape codes for matching, preserves them in output, highlights across ANSI boundaries.
 - `args.ts` — Command palette plus the two input paths onto `CommandDef[]`: `parseCommandDef` for CLI positionals (incremental, one value at a time) and `normalizeCommands` for programmatic input (validates and fills in colors for the whole list at once).
@@ -26,8 +36,16 @@ Always run build + test after changes.
 
 ## Design decisions
 
+- **A missing TTY is a fallback, not an error.** Piping, redirecting or running from CI drops to inline mode instead of refusing to start, because those are the cases where people most want a process runner. There is deliberately no flag to restore the old hard failure: it would only ever fire where nobody wanted a TUI anyway.
+- **The supervisor emits events, not formatted text.** It would have been shorter to keep building the `Process exited with code 1` strings where the exit is handled, but then JSON output would be a scrape of the human output and every renderer would inherit the TUI's wording. Each front end decides how an event reads.
+- **`onData` exists alongside `onLine` for one reason.** The tabbed view shows raw chunks so a partial line — a progress bar, a prompt — is visible before its newline lands. Everything line-oriented (the stream buffer, inline mode, JSON) uses `onLine` and waits for the newline. Dropping `onData` and rebuilding the tab buffer from lines would make unterminated output invisible until the process exits.
+- **Inline mode's defaults are not the TUI's**, in two places only: it exits when the last command does, and it exits with the first permanent failure's code. Everything else, auto-restart included, is identical — a mode-dependent default means the same command line behaves differently depending on whether someone piped it, which is worse than either choice.
+- **Restart is guarded by uptime, not by mode.** A crash inside `MIN_UPTIME_FOR_RESTART_MS` is never retried, because a command that died that fast never started; anything longer-lived gets the full 5 attempts. This is what replaced an earlier mode-dependent default, and it is why there is one `--no-restart` flag rather than a `--restart`/`--no-restart` pair plus a `getOptionValueSource` dance in `cli.tsx` to tell "not passed" from "passed false". `onFailed` carries a `FailureReason` so the distinction is visible rather than looking like a silently skipped restart.
+- **Only permanent failures set the exit code.** `onFailed`, not `onExit` — a command that crashed, auto-restarted and then ran clean did not fail the run.
+- **Multiplex's own notices go to stderr inline.** Command output goes to whichever stream it came from, so `multiplex ... > out.log` gets the commands' stdout and nothing else. This is why the supervisor tags every line with its stream, which the old merged `handleData` threw away.
+- **JSON events carry a `v`.** Anything parsing the stream needs to know when the shape changes; bumping `JSON_SCHEMA_VERSION` is the contract. `text` is ANSI-stripped, because a consumer parsing JSON does not want escape codes inside a string field.
 - **SIGKILL is intentional at all kill sites.** Exit and signal handlers are synchronous (can't wait for SIGTERM), manual restart spawns the replacement immediately (SIGTERM would race on port binding), and cleanup on unmount has no event loop to wait on. Do not change to SIGTERM.
-- **`restartingRef` counts outstanding intentional kills; only bump it when the kill lands.** It exists to stop our own SIGKILL being reported as a crash, and every entry must be paid for by a real exit event. Bumping it for a process that has already exited (or never spawned, so has no pid) leaves it set with no exit coming, which swallows the replacement's crash and leaves a dead process looking healthy in the sidebar — reachable by pressing `r` on a failed tab, the documented recovery path. Hence the `exitCode === null && signalCode === null` guard, and the bump sitting after `process.kill` inside the `try`. It is a count rather than a flag so two rapid restarts don't report the second kill as a crash.
+- **`intentionalKills` (in `supervisor.ts`) counts outstanding intentional kills; only bump it when the kill lands.** It exists to stop our own SIGKILL being reported as a crash, and every entry must be paid for by a real exit event. Bumping it for a process that has already exited (or never spawned, so has no pid) leaves it set with no exit coming, which swallows the replacement's crash and leaves a dead process looking healthy in the sidebar — reachable by pressing `r` on a failed tab, the documented recovery path. Hence the `exitCode === null && signalCode === null` guard, and the bump sitting after `process.kill` inside the `try`. It is a count rather than a flag so two rapid restarts don't report the second kill as a crash.
 - **Signal handlers are load-bearing, not belt-and-braces.** `process.on("exit")` does not run when the process is killed by a signal, and children are spawned into their own process groups so they never receive the terminal's SIGHUP. Without explicit SIGINT/SIGTERM/SIGHUP/SIGQUIT handlers, closing the terminal window leaves every dev server running and holding its port.
 - **`shutdown()` ordering is fixed:** unmount Ink → kill children → leave the alternate screen → flush output. Ink's final frame and its raw-mode teardown have to happen while we still own the alternate screen; the flush has to happen after we've left it, or the logs never reach real scrollback. It guards on `shuttingDown`, so a second signal mid-flush force-exits rather than printing twice.
 - **`multiplex()` never calls `process.exit` on its own.** It returns an exit code and removes the signal and exit listeners it installed, so a host process that calls it programmatically survives and keeps a usable terminal. Only the signal handlers exit, because a signal has to terminate the process.

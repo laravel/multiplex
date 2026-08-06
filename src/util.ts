@@ -95,3 +95,42 @@ export function childColumns(
 
     return Math.max(MIN_CHILD_COLUMNS, Math.min(tabbed, stream));
 }
+
+/**
+ * The label prefix in front of every interleaved line. The only implementation:
+ * the stream pane, the flush on exit and inline mode all call it, so the same
+ * run cannot come out looking like two different programs depending on where you
+ * happened to read it. Its width is STREAM_LABEL_EXTRA past the longest label.
+ */
+export function formatStreamLabel(
+    label: string,
+    color: string,
+    maxLabelLen: number,
+    useColor: boolean,
+): string {
+    const padding = " ".repeat(maxLabelLen - label.length);
+
+    if (!useColor) {
+        return `${padding}${label} │ `;
+    }
+
+    const [r, g, b] = hexToRgb(color);
+
+    return `\x1b[1;38;2;${r};${g};${b}m${padding}${label}\x1b[0m\x1b[90m │ \x1b[0m`;
+}
+
+/**
+ * COLUMNS for inline mode. There is no pane to truncate against, so this only
+ * stops children wrapping under their own label prefix.
+ */
+export function inlineChildColumns(
+    labels: string[],
+    totalColumns: number,
+    timestamps: boolean,
+): number {
+    const maxLabelLen = Math.max(...labels.map((l) => l.length));
+    const prefix =
+        maxLabelLen + STREAM_LABEL_EXTRA + (timestamps ? TIMESTAMP_WIDTH : 0);
+
+    return Math.max(MIN_CHILD_COLUMNS, totalColumns - prefix);
+}

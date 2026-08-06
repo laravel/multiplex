@@ -1,5 +1,6 @@
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createSupervisor, type Supervisor } from "./supervisor.js";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
 import { childColumns, formatTimestamp, systemMsg } from "./util.js";
 
@@ -70,328 +71,198 @@ export function useProcesses({
     const outputBuffersRef = useRef<string[]>(commandDefs.map(() => ""));
     const outputLineCountsRef = useRef<number[]>(commandDefs.map(() => 1));
     const streamLinesRef = useRef<StreamLine[]>([]);
-    const partialsRef = useRef<string[]>(commandDefs.map(() => ""));
-    const procsRef = useRef<ChildProcess[]>([]);
-    // How many exits per command are ours rather than the process failing. A
-    // plain flag was wrong in both directions: set with no exit coming, it
-    // swallowed the next real crash, and it could not hold two rapid restarts.
-    const restartingRef = useRef<Map<number, number>>(new Map());
     const spawnTimeRef = useRef<number[]>(commandDefs.map(() => 0));
     const pendingRestartsRef = useRef<Set<number>>(new Set());
-    const autoRestartTimersRef = useRef<
-        Map<number, ReturnType<typeof setTimeout>>
-    >(new Map());
-    const autoRestartCountsRef = useRef<number[]>(commandDefs.map(() => 0));
-    const restartProcessRef = useRef<(i: number, manual?: boolean) => void>(
-        () => {},
-    );
+    const supervisorRef = useRef<Supervisor | null>(null);
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
 
     if (outputRef) {
         outputRef.current = streamLinesRef.current;
     }
 
-    const spawnProcess = useCallback(
-        (cmd: CommandDef, i: number) => {
-            spawnTimeRef.current[i] = Date.now();
+    const pushLine = useCallback(
+        (index: number, text: string, time: Date) => {
+            const ts = timestamps ? formatTimestamp(time) : "";
 
-            const proc = spawn("sh", ["-c", cmd.command], {
-                cwd,
-                detached: true,
-                env: {
-                    ...process.env,
-                    FORCE_COLOR: "1",
-                    COLUMNS: String(
-                        childColumns(
-                            commandDefs.map((c) => c.label),
-                            stdout?.columns ?? 80,
-                            timestamps,
-                        ),
-                    ),
-                },
-                stdio: ["ignore", "pipe", "pipe"],
-            });
+            if (timestamps) {
+                outputBuffersRef.current[index] += `${ts}${text}\n`;
+            }
 
-            const handleData = (data: Buffer) => {
-                const text = data.toString().replace(/\r/g, "");
+            streamLinesRef.current.push({ cmdIndex: index, text, ts });
 
-                if (!timestamps) {
-                    outputBuffersRef.current[i] += text;
-                }
-
-                let newLines = 0;
-
-                for (let c = 0; c < text.length; c++) {
-                    if (text[c] === "\n") {
-                        newLines++;
-                    }
-                }
-
-                outputLineCountsRef.current[i] += newLines;
-
-                if (outputLineCountsRef.current[i] > bufferSize * 1.5) {
-                    const bufLines = outputBuffersRef.current[i].split("\n");
-                    outputBuffersRef.current[i] = bufLines
-                        .slice(-bufferSize)
-                        .join("\n");
-                    outputLineCountsRef.current[i] = bufferSize;
-                }
-
-                partialsRef.current[i] += text;
-
-                const lines = partialsRef.current[i].split("\n");
-
-                partialsRef.current[i] = lines.pop() ?? "";
-
-                const now = new Date();
-                const tsPrefix = timestamps ? formatTimestamp(now) : "";
-
-                for (const line of lines) {
-                    streamLinesRef.current.push({
-                        cmdIndex: i,
-                        text: line,
-                        ts: tsPrefix,
-                    });
-
-                    if (timestamps) {
-                        outputBuffersRef.current[i] += `${tsPrefix}${line}\n`;
-                    }
-                }
-
-                if (streamLinesRef.current.length > streamBufferSize * 1.5) {
-                    streamLinesRef.current.splice(
-                        0,
-                        streamLinesRef.current.length - streamBufferSize,
-                    );
-                }
-
-                triggerRender();
-            };
-
-            proc.stdout?.on("data", handleData);
-            proc.stderr?.on("data", handleData);
-
-            proc.on("error", (err) => {
-                const now = new Date();
-                const errorMsg = systemMsg(`Failed to start: ${err.message}`);
-                const tsPrefix = timestamps ? formatTimestamp(now) : "";
-
-                outputBuffersRef.current[i] += `\n${tsPrefix}${errorMsg}`;
-                streamLinesRef.current.push({
-                    cmdIndex: i,
-                    text: errorMsg,
-                    ts: tsPrefix,
-                });
-
-                setFailedProcs((prev) => new Set(prev).add(i));
-                triggerRender();
-            });
-
-            proc.on("exit", (exitCode) => {
-                const weKilledIt = restartingRef.current.get(i) ?? 0;
-
-                if (weKilledIt > 0) {
-                    restartingRef.current.set(i, weKilledIt - 1);
-
-                    return;
-                }
-
-                const now = new Date();
-                const exitMsg = systemMsg(
-                    `Process exited with code ${exitCode}`,
+            if (streamLinesRef.current.length > streamBufferSize * 1.5) {
+                streamLinesRef.current.splice(
+                    0,
+                    streamLinesRef.current.length - streamBufferSize,
                 );
-                const tsPrefix = timestamps ? formatTimestamp(now) : "";
+            }
+        },
+        [timestamps, streamBufferSize],
+    );
 
-                outputBuffersRef.current[i] += `\n${tsPrefix}${exitMsg}`;
-                streamLinesRef.current.push({
-                    cmdIndex: i,
-                    text: exitMsg,
-                    ts: tsPrefix,
-                });
+    // A system message is not process output, so it never carries a timestamp
+    // prefix in the buffer the way a real line does.
+    const pushSystem = useCallback(
+        (index: number, text: string, time: Date) => {
+            const msg = systemMsg(text);
+            const ts = timestamps ? formatTimestamp(time) : "";
 
-                if (partialsRef.current[i].trim()) {
+            outputBuffersRef.current[index] += `\n${ts}${msg}`;
+            outputLineCountsRef.current[index]++;
+
+            streamLinesRef.current.push({ cmdIndex: index, text: msg, ts });
+        },
+        [timestamps],
+    );
+
+    if (!supervisorRef.current) {
+        supervisorRef.current = createSupervisor({
+            commandDefs,
+            cwd,
+            columns: childColumns(
+                commandDefs.map((c) => c.label),
+                stdout?.columns ?? 80,
+                timestamps,
+            ),
+            autoRestart,
+            forceColor: true,
+            handlers: {
+                onSpawn({ index, time }) {
+                    spawnTimeRef.current[index] = time.getTime();
+                },
+
+                onData({ index, chunk }) {
+                    if (!timestamps) {
+                        outputBuffersRef.current[index] += chunk;
+                    }
+
+                    let newLines = 0;
+
+                    for (let c = 0; c < chunk.length; c++) {
+                        if (chunk[c] === "\n") {
+                            newLines++;
+                        }
+                    }
+
+                    outputLineCountsRef.current[index] += newLines;
+
+                    if (outputLineCountsRef.current[index] > bufferSize * 1.5) {
+                        const bufLines =
+                            outputBuffersRef.current[index].split("\n");
+
+                        outputBuffersRef.current[index] = bufLines
+                            .slice(-bufferSize)
+                            .join("\n");
+                        outputLineCountsRef.current[index] = bufferSize;
+                    }
+
+                    triggerRender();
+                },
+
+                onLine({ index, text, time }) {
+                    pushLine(index, text, time);
+                },
+
+                onSpawnError({ index, message, time }) {
+                    pushSystem(index, `Failed to start: ${message}`, time);
+                    triggerRender();
+                },
+
+                onExit({ index, code, time }) {
+                    pushSystem(index, `Process exited with code ${code}`, time);
+                    triggerRender();
+                },
+
+                onRestartScheduled({ index, attempt, max, time }) {
+                    pendingRestartsRef.current.add(index);
+                    pushSystem(
+                        index,
+                        `Restarting (${attempt}/${max})...`,
+                        time,
+                    );
+                    triggerRender();
+                },
+
+                onRestarted({ index, time }) {
+                    pendingRestartsRef.current.delete(index);
+
+                    const msg = systemMsg(
+                        timestamps
+                            ? "Restarted"
+                            : `Restarted at ${time.toLocaleTimeString("en-GB")}`,
+                    );
+                    const ts = timestamps ? formatTimestamp(time) : "";
+
+                    outputBuffersRef.current[index] = `${ts}${msg}\n`;
+                    outputLineCountsRef.current[index] = 2;
+
                     streamLinesRef.current.push({
-                        cmdIndex: i,
-                        text: partialsRef.current[i],
-                        ts: tsPrefix,
+                        cmdIndex: index,
+                        text: msg,
+                        ts,
                     });
-                    partialsRef.current[i] = "";
-                }
 
-                if (exitCode === 0 || exitCode === null) {
-                    autoRestartCountsRef.current[i] = 0;
-                } else {
-                    autoRestartCountsRef.current[i]++;
+                    setFailedProcs((prev) => {
+                        const next = new Set(prev);
 
-                    if (autoRestart && autoRestartCountsRef.current[i] <= 5) {
-                        const attempt = autoRestartCountsRef.current[i];
-                        const restartMsg = systemMsg(
-                            `Restarting (${attempt}/5)...`,
-                        );
-                        const restartTsPrefix = timestamps
-                            ? formatTimestamp(now)
-                            : "";
+                        next.delete(index);
 
-                        outputBuffersRef.current[i] +=
-                            `\n${restartTsPrefix}${restartMsg}`;
-                        streamLinesRef.current.push({
-                            cmdIndex: i,
-                            text: restartMsg,
-                            ts: restartTsPrefix,
-                        });
+                        return next;
+                    });
 
-                        pendingRestartsRef.current.add(i);
+                    triggerRender();
+                },
 
-                        const timer = setTimeout(() => {
-                            autoRestartTimersRef.current.delete(i);
-                            pendingRestartsRef.current.delete(i);
-                            restartProcessRef.current(i, false);
-                        }, 1000);
+                onFailed({ index, code }) {
+                    setFailedProcs((prev) => new Set(prev).add(index));
 
-                        autoRestartTimersRef.current.set(i, timer);
-                    } else {
-                        setFailedProcs((prev) => new Set(prev).add(i));
+                    if (code !== null) {
                         notify(
                             title ?? "Multiplex",
-                            `${cmd.label} crashed (exit code ${exitCode})`,
+                            `${commandDefs[index].label} crashed (exit code ${code})`,
                         );
                     }
-                }
 
-                triggerRender();
-            });
+                    triggerRender();
+                },
+            },
+        });
+    }
 
-            return proc;
-        },
-        [
-            autoRestart,
-            cwd,
-            bufferSize,
-            streamBufferSize,
-            timestamps,
-            triggerRender,
-        ],
-    );
-
-    const restartProcess = useCallback(
-        (i: number, manual = true) => {
-            const pendingTimer = autoRestartTimersRef.current.get(i);
-            if (pendingTimer) {
-                clearTimeout(pendingTimer);
-                autoRestartTimersRef.current.delete(i);
-                pendingRestartsRef.current.delete(i);
-            }
-
-            if (manual) {
-                autoRestartCountsRef.current[i] = 0;
-
-                const proc = procsRef.current[i];
-
-                // Only claim an exit when the kill is what causes it. Restarting
-                // a process that already died — the whole point of `r` on a
-                // failed tab — sends no signal and produces no exit event, so
-                // claiming one here would swallow the replacement's crash and
-                // leave a dead process looking healthy.
-                if (
-                    proc?.pid &&
-                    proc.exitCode === null &&
-                    proc.signalCode === null
-                ) {
-                    try {
-                        process.kill(-proc.pid, "SIGKILL");
-                        restartingRef.current.set(
-                            i,
-                            (restartingRef.current.get(i) ?? 0) + 1,
-                        );
-                    } catch {
-                        //
-                    }
-                }
-            }
-
-            const now = new Date();
-            const restartMsg = timestamps
-                ? systemMsg("Restarted")
-                : systemMsg(`Restarted at ${now.toLocaleTimeString("en-GB")}`);
-            const tsPrefix = timestamps ? formatTimestamp(now) : "";
-
-            outputBuffersRef.current[i] = `${tsPrefix}${restartMsg}\n`;
-            outputLineCountsRef.current[i] = 2;
-            partialsRef.current[i] = "";
-
-            streamLinesRef.current.push({
-                cmdIndex: i,
-                text: restartMsg,
-                ts: tsPrefix,
-            });
-
-            setFailedProcs((prev) => {
-                const next = new Set(prev);
-
-                next.delete(i);
-
-                return next;
-            });
-
-            const newProc = spawnProcess(commandDefs[i], i);
-
-            procsRef.current[i] = newProc;
-
-            if (externalProcsRef) {
-                externalProcsRef.current[i] = newProc;
-            }
-
-            triggerRender();
-        },
-        [commandDefs, spawnProcess, triggerRender],
-    );
-
-    restartProcessRef.current = restartProcess;
+    const restartProcess = useCallback((index: number) => {
+        supervisorRef.current?.restart(index, true);
+    }, []);
 
     useEffect(() => {
-        const procs = commandDefs.map((cmd, i) => spawnProcess(cmd, i));
+        const supervisor = supervisorRef.current;
 
-        procsRef.current = procs;
-
-        if (externalProcsRef) {
-            externalProcsRef.current = procs;
+        if (!supervisor) {
+            return;
         }
 
-        return () => {
-            for (const timer of autoRestartTimersRef.current.values()) {
-                clearTimeout(timer);
-            }
+        supervisor.start();
 
-            autoRestartTimersRef.current.clear();
+        if (externalProcsRef) {
+            externalProcsRef.current = supervisor.procs;
+        }
 
-            procs.forEach((proc) => {
-                try {
-                    if (proc.pid) {
-                        process.kill(-proc.pid, "SIGKILL");
-                    }
-                } catch {
-                    //
-                }
-            });
-        };
-    }, [commandDefs, spawnProcess]);
+        return () => supervisor.stop();
+    }, []);
 
     const clearOutput = useCallback(
         (index: number) => {
             const now = new Date();
-            const clearMsg = timestamps
-                ? systemMsg("Cleared")
-                : systemMsg(`Cleared at ${now.toLocaleTimeString("en-GB")}`);
-            const tsPrefix = timestamps ? formatTimestamp(now) : "";
+            const msg = systemMsg(
+                timestamps
+                    ? "Cleared"
+                    : `Cleared at ${now.toLocaleTimeString("en-GB")}`,
+            );
+            const ts = timestamps ? formatTimestamp(now) : "";
 
-            outputBuffersRef.current[index] = `${tsPrefix}${clearMsg}`;
+            outputBuffersRef.current[index] = `${ts}${msg}`;
             outputLineCountsRef.current[index] = 1;
 
-            streamLinesRef.current.push({
-                cmdIndex: index,
-                text: clearMsg,
-                ts: tsPrefix,
-            });
+            streamLinesRef.current.push({ cmdIndex: index, text: msg, ts });
         },
         [timestamps],
     );

@@ -54,7 +54,7 @@ const CONTENT_BORDER = 2;
 const CONTENT_PADDING = 1;
 const SCROLLBAR_WIDTH = 2;
 const STREAM_PADDING = 1;
-// The "[", the "]" and the space that follow the label in stream mode.
+// The " │ " rule that separates the label from the output in stream mode.
 const STREAM_LABEL_EXTRA = 3;
 const MIN_CHILD_COLUMNS = 20;
 

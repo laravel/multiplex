@@ -562,7 +562,7 @@ export function App({
                 const [r, g, b] = hexToRgb(cmd.color);
                 const padding = " ".repeat(maxLabelLen - cmd.label.length);
 
-                return `${sl.ts}\x1b[1;38;2;${r};${g};${b}m[${cmd.label}]${padding} \x1b[0m${sl.text}`;
+                return `${sl.ts}\x1b[1;38;2;${r};${g};${b}m${padding}${cmd.label}\x1b[0m\x1b[90m │ \x1b[0m${sl.text}`;
             });
     }, [
         renderTick,

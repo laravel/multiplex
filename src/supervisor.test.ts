@@ -113,6 +113,17 @@ describe("createSupervisor", () => {
         ]);
     });
 
+    // 'exit' arrives before the pipe has been read, so a command that prints
+    // and exits immediately used to settle the run with its output still in
+    // flight — reliably enough on a loaded CI runner to fail the suite.
+    it("delivers output that was still in the pipe when the process exited", async () => {
+        const result = await run([cmd("a", "seq 1 2000")]);
+
+        assert.equal(result.lines.length, 2000);
+        assert.equal(result.lines[0].text, "1");
+        assert.equal(result.lines[1999].text, "2000");
+    });
+
     // Without this the last line of anything that does not end in a newline —
     // an unterminated error message, a prompt — is lost when the process dies.
     it("flushes a trailing partial line before the exit", async () => {

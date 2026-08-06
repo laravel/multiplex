@@ -14,6 +14,15 @@ export const RESTART_DELAY_MS = 1000;
  */
 export const MIN_UPTIME_FOR_RESTART_MS = 1000;
 
+/**
+ * How long to wait for a dead command's pipes to close before reporting the
+ * exit anyway. Draining takes microseconds when the pipe is ours alone, so this
+ * only ever fires for a command that left a grandchild holding its stdout — a
+ * `&`'d process, a wrapper that forks — where the pipe never closes at all and
+ * waiting for it would hang the run instead of ending it.
+ */
+export const EXIT_DRAIN_GRACE_MS = 500;
+
 /** Why a command is not going to be restarted. */
 export type FailureReason =
     | "spawn-error"
@@ -217,7 +226,10 @@ export function createSupervisor({
             }
         });
 
-        proc.on("exit", (code, signal) => {
+        const handleExit = (
+            code: number | null,
+            signal: NodeJS.Signals | null,
+        ) => {
             const ours = intentionalKills.get(i) ?? 0;
 
             if (ours > 0) {
@@ -297,6 +309,59 @@ export function createSupervisor({
                     restart(i, false);
                 }, restartDelayMs),
             );
+        };
+
+        // 'exit' means the process is gone, not that we have read what it
+        // printed: whatever is still sitting in the pipe arrives afterwards.
+        // Acting on it there loses the tail of every command that exits right
+        // after writing, and settles the run before those lines are delivered.
+        // So hold the exit until the pipes close, or until the grace period
+        // says nobody is ever going to close them.
+        let exited: {
+            code: number | null;
+            signal: NodeJS.Signals | null;
+        } | null = null;
+        let openPipes = 0;
+        let drainTimer: ReturnType<typeof setTimeout> | undefined;
+        let reported = false;
+
+        const reportExit = () => {
+            if (reported || !exited) {
+                return;
+            }
+
+            reported = true;
+
+            clearTimeout(drainTimer);
+            handleExit(exited.code, exited.signal);
+        };
+
+        for (const pipe of [proc.stdout, proc.stderr]) {
+            if (!pipe) {
+                continue;
+            }
+
+            openPipes++;
+
+            pipe.on("close", () => {
+                openPipes--;
+
+                if (openPipes === 0) {
+                    reportExit();
+                }
+            });
+        }
+
+        proc.on("exit", (code, signal) => {
+            exited = { code, signal };
+
+            if (openPipes === 0) {
+                reportExit();
+
+                return;
+            }
+
+            drainTimer = setTimeout(reportExit, EXIT_DRAIN_GRACE_MS);
         });
 
         return proc;

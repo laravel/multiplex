@@ -2,15 +2,10 @@ import { InvalidArgumentError } from "commander";
 import { DEFAULT_COLORS, normalizeColor } from "./color.js";
 import type { CommandDef, CommandInput } from "./types.js";
 
-const FORMAT = "Expected label,command or label:color,command";
+const FORMAT = "Expected label,command or label@color,command";
 
 const badColor = (value: string, label?: string) =>
     `"${value}" is not a valid color${label ? ` for "${label}"` : ""}. Expected a 6-digit hex value such as #93c5fd, or a name such as red or blueBright.`;
-
-// The old label,#color,command form, rejected rather than still accepted: the
-// current format reads that color as the first word of the command, so the run
-// would otherwise look like it started fine.
-const LEGACY_COLOR_SLOT = /^#[0-9a-fA-F]{6},/;
 
 /**
  * One CLI positional onto a CommandInput. The color attaches to the label rather
@@ -37,30 +32,21 @@ export function parseCommandDef(
         );
     }
 
-    if (LEGACY_COLOR_SLOT.test(command)) {
-        const end = command.indexOf(",");
+    // The last @, and never the first character: a label is free to contain one
+    // — a scoped package name is all label — as long as it isn't the final
+    // segment, which is the color.
+    const at = head.lastIndexOf("@");
 
-        throw new InvalidArgumentError(
-            `Colors now attach to the label: write ${head}:${command.slice(0, end)},${command.slice(end + 1)}`,
-        );
-    }
-
-    const colon = head.indexOf(":");
-
-    if (colon === -1) {
+    if (at < 1) {
         return [...previous, { label: head, command }];
     }
 
-    const label = head.slice(0, colon);
-    const color = normalizeColor(head.slice(colon + 1));
-
-    if (!label) {
-        throw new InvalidArgumentError(`"${head}" has no label. ${FORMAT}`);
-    }
+    const label = head.slice(0, at);
+    const color = normalizeColor(head.slice(at + 1));
 
     if (!color) {
         throw new InvalidArgumentError(
-            `${badColor(head.slice(colon + 1))} Everything after the first colon is the color, so a label cannot contain one.`,
+            `${badColor(head.slice(at + 1))} Everything after the last @ is the color.`,
         );
     }
 

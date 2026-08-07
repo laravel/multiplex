@@ -41,7 +41,7 @@ const program = new Command()
     .helpOption("-h, --help", "Display help for the command")
     .argument(
         "<commands...>",
-        "commands as label,command or label:color,command",
+        "commands as label,command or label@color,command",
         parseCommandDef,
         [] as CommandInput[],
     )
@@ -59,7 +59,7 @@ const program = new Command()
 
             lines.push(yellow("Arguments:"));
             lines.push(
-                `  ${green("commands")}  The commands to run as ${green("label,command")} or ${green("label:color,command")}`,
+                `  ${green("commands")}  The commands to run as ${green("label,command")} or ${green("label@color,command")}`,
             );
             lines.push(
                 `            ${green("color")} is a 6-digit hex value or a name such as ${green("red")} or ${green("blueBright")}`,

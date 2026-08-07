@@ -55,17 +55,17 @@
     "dependencies": {
         "ansi-styles": "^6.2.3",
         "commander": "^15.0.0",
-        "ink": "^5.2.1",
-        "react": "^18.3.1",
-        "string-width": "^7.2.0",
-        "wrap-ansi": "^9.0.2"
+        "ink": "^7.1.0",
+        "react": "^19.2.7",
+        "string-width": "^8.2.2",
+        "wrap-ansi": "^10.0.0"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.6",
-        "@types/node": "^22.20.1",
-        "@types/react": "^18.3.31",
+        "@types/node": "^26.1.1",
+        "@types/react": "^19.2.17",
         "tsx": "^4.23.5",
-        "typescript": "^5.9.3"
+        "typescript": "^7.0.2"
     },
     "publishConfig": {
         "access": "public"

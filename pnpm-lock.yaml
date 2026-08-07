@@ -17,6 +17,12 @@ importers:
       react:
         specifier: ^18.3.1
         version: 18.3.1
+      string-width:
+        specifier: ^7.2.0
+        version: 7.2.0
+      wrap-ansi:
+        specifier: ^9.0.2
+        version: 9.0.2
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.6

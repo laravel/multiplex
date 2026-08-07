@@ -6,10 +6,13 @@ import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import {
+    formatStreamContinuation,
     formatStreamLabel,
     MIN_TABS_LAYOUT_WIDTH,
     minTabsLayoutHeight,
     sidebarWidth,
+    tabbedTextWidth,
+    wrapLine,
 } from "./util.js";
 
 const SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
@@ -108,7 +111,8 @@ export function App({
     }, [notifyNewOutput]);
 
     const {
-        outputBuffersRef,
+        outputRowsRef,
+        outputPendingRef,
         streamLinesRef,
         failedProcs,
         restartProcess,
@@ -124,7 +128,7 @@ export function App({
         timestamps,
         autoRestart,
         title,
-        stdout,
+        columns: cols,
         triggerRender,
         outputRef,
         externalProcsRef,
@@ -549,18 +553,38 @@ export function App({
         cols,
     );
 
+    const tabbedWrapWidth = tabbedTextWidth(
+        commandDefs.map((c) => c.label),
+        cols,
+        timestamps,
+    );
+
     // renderTick stands in for the ref contents React cannot see change.
     const displayLines = useMemo(() => {
         if (!streamMode) {
-            return outputBuffersRef.current[selectedIndex].split("\n");
+            // Rows arrive pre-wrapped; only the unterminated tail is still raw.
+            return outputRowsRef.current[selectedIndex].concat(
+                wrapLine(
+                    outputPendingRef.current[selectedIndex],
+                    tabbedWrapWidth,
+                ),
+            );
         }
 
         return streamLinesRef.current
             .filter((sl) => !hiddenProcs.has(sl.cmdIndex))
             .map((sl) => {
                 const cmd = commandDefs[sl.cmdIndex];
+                const prefix = sl.cont
+                    ? formatStreamContinuation(maxLabelLen, true)
+                    : formatStreamLabel(
+                          cmd.label,
+                          cmd.color,
+                          maxLabelLen,
+                          true,
+                      );
 
-                return `${sl.ts}${formatStreamLabel(cmd.label, cmd.color, maxLabelLen, true)}${sl.text}`;
+                return `${sl.ts}${prefix}${sl.text}`;
             });
     }, [
         renderTick,
@@ -569,7 +593,9 @@ export function App({
         hiddenProcs,
         commandDefs,
         maxLabelLen,
-        outputBuffersRef,
+        tabbedWrapWidth,
+        outputRowsRef,
+        outputPendingRef,
         streamLinesRef,
     ]);
 

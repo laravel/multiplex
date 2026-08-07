@@ -8,3 +8,19 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Patch waits as long as minor because the September 2025 npm compromise
+  # shipped as patch releases, and cooldown does not delay security updates.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 7
+    groups:
+      npm:
+        patterns:
+          - "*"

@@ -34,6 +34,8 @@ export type StreamLine = {
     cmdIndex: number;
     text: string;
     ts: string;
+    /** A second or later row of a line too wide for the pane. */
+    cont?: boolean;
 };
 
 export type OutputRef = {

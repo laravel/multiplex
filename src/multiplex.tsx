@@ -7,6 +7,7 @@ import { normalizeCommands } from "./args.js";
 import { runInline } from "./inline.js";
 import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
 import {
+    formatStreamContinuation,
     formatStreamLabel,
     inlineChildColumns,
     MIN_ROWS,
@@ -218,10 +219,16 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
             try {
                 for (const sl of outputRef.current) {
                     const cmd = commandDefs[sl.cmdIndex];
+                    const prefix = sl.cont
+                        ? formatStreamContinuation(maxLabelLen, true)
+                        : formatStreamLabel(
+                              cmd.label,
+                              cmd.color,
+                              maxLabelLen,
+                              true,
+                          );
 
-                    process.stdout.write(
-                        `${sl.ts}${formatStreamLabel(cmd.label, cmd.color, maxLabelLen, true)}${sl.text}\n`,
-                    );
+                    process.stdout.write(`${sl.ts}${prefix}${sl.text}\n`);
                 }
             } catch {
                 // The terminal can already be gone when we got here via SIGHUP.

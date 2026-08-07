@@ -2,7 +2,15 @@ import { execSync, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupervisor, type Supervisor } from "./supervisor.js";
 import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
-import { childColumns, formatTimestamp, systemMsg } from "./util.js";
+import {
+    childColumns,
+    formatTimestamp,
+    streamTextWidth,
+    systemMsg,
+    TIMESTAMP_WIDTH,
+    tabbedTextWidth,
+    wrapLine,
+} from "./util.js";
 
 const hasNotifySend =
     process.platform === "linux" &&
@@ -49,7 +57,7 @@ type UseProcessesOptions = {
     timestamps: boolean;
     autoRestart: boolean;
     title?: string;
-    stdout: NodeJS.WriteStream | undefined;
+    columns: number;
     triggerRender: () => void;
     outputRef?: OutputRef;
     externalProcsRef?: ProcsRef;
@@ -63,13 +71,16 @@ export function useProcesses({
     timestamps,
     autoRestart,
     title,
-    stdout,
+    columns,
     triggerRender,
     outputRef,
     externalProcsRef,
 }: UseProcessesOptions) {
-    const outputBuffersRef = useRef<string[]>(commandDefs.map(() => ""));
-    const outputLineCountsRef = useRef<number[]>(commandDefs.map(() => 1));
+    // Complete rows, already wrapped to the pane, plus the tail of output that
+    // has not seen its newline yet. The tail stays raw because more of it is
+    // still arriving; it is wrapped at render time instead.
+    const outputRowsRef = useRef<string[][]>(commandDefs.map(() => []));
+    const outputPendingRef = useRef<string[]>(commandDefs.map(() => ""));
     const streamLinesRef = useRef<StreamLine[]>([]);
     const spawnTimeRef = useRef<number[]>(commandDefs.map(() => 0));
     const pendingRestartsRef = useRef<Set<number>>(new Set());
@@ -80,15 +91,65 @@ export function useProcesses({
         outputRef.current = streamLinesRef.current;
     }
 
-    const pushLine = useCallback(
-        (index: number, text: string, time: Date) => {
-            const ts = timestamps ? formatTimestamp(time) : "";
+    const labels = commandDefs.map((c) => c.label);
 
-            if (timestamps) {
-                outputBuffersRef.current[index] += `${ts}${text}\n`;
+    // Read by the supervisor handlers, which are built once and would otherwise
+    // keep wrapping to the width the terminal happened to be at startup.
+    const wrapWidthRef = useRef({ tabbed: 0, stream: 0 });
+
+    wrapWidthRef.current = {
+        tabbed: tabbedTextWidth(labels, columns, timestamps),
+        stream: streamTextWidth(labels, columns, timestamps),
+    };
+
+    const pushRows = useCallback(
+        (index: number, rows: string[]) => {
+            const buf = outputRowsRef.current[index];
+
+            for (const row of rows) {
+                buf.push(row);
             }
 
-            streamLinesRef.current.push({ cmdIndex: index, text, ts });
+            if (buf.length > bufferSize * 1.5) {
+                buf.splice(0, buf.length - bufferSize);
+            }
+        },
+        [bufferSize],
+    );
+
+    // Terminates the buffered tail, exactly as writing a "\n" to the old string
+    // buffer did — including when the tail is empty, which leaves a blank row.
+    const commitPending = useCallback(
+        (index: number) => {
+            pushRows(
+                index,
+                wrapLine(
+                    outputPendingRef.current[index],
+                    wrapWidthRef.current.tabbed,
+                ),
+            );
+
+            outputPendingRef.current[index] = "";
+        },
+        [pushRows],
+    );
+
+    // Only the first row carries the timestamp; the rest are padded to its width
+    // so the label column stays straight.
+    const pushStreamRows = useCallback(
+        (index: number, text: string, ts: string) => {
+            const rows = wrapLine(text, wrapWidthRef.current.stream);
+            // ts carries escape codes, so its own length is not its width.
+            const tsPad = ts === "" ? "" : " ".repeat(TIMESTAMP_WIDTH);
+
+            for (let i = 0; i < rows.length; i++) {
+                streamLinesRef.current.push({
+                    cmdIndex: index,
+                    text: rows[i],
+                    ts: i === 0 ? ts : tsPad,
+                    cont: i > 0,
+                });
+            }
 
             if (streamLinesRef.current.length > streamBufferSize * 1.5) {
                 streamLinesRef.current.splice(
@@ -97,7 +158,27 @@ export function useProcesses({
                 );
             }
         },
-        [timestamps, streamBufferSize],
+        [streamBufferSize],
+    );
+
+    const pushLine = useCallback(
+        (index: number, text: string, time: Date) => {
+            const ts = timestamps ? formatTimestamp(time) : "";
+
+            if (timestamps) {
+                const tsPad = " ".repeat(TIMESTAMP_WIDTH);
+
+                pushRows(
+                    index,
+                    wrapLine(text, wrapWidthRef.current.tabbed).map(
+                        (row, i) => `${i === 0 ? ts : tsPad}${row}`,
+                    ),
+                );
+            }
+
+            pushStreamRows(index, text, ts);
+        },
+        [timestamps, pushRows, pushStreamRows],
     );
 
     // A system message is not process output, so it never carries a timestamp
@@ -107,23 +188,22 @@ export function useProcesses({
             const msg = systemMsg(text);
             const ts = timestamps ? formatTimestamp(time) : "";
 
-            outputBuffersRef.current[index] += `\n${ts}${msg}`;
-            outputLineCountsRef.current[index]++;
+            commitPending(index);
 
-            streamLinesRef.current.push({ cmdIndex: index, text: msg, ts });
+            // Left as the tail rather than committed, so it is re-wrapped on a
+            // resize and the buffer reads the same as the old "\n" + msg did.
+            outputPendingRef.current[index] = `${ts}${msg}`;
+
+            pushStreamRows(index, msg, ts);
         },
-        [timestamps],
+        [timestamps, commitPending, pushStreamRows],
     );
 
     if (!supervisorRef.current) {
         supervisorRef.current = createSupervisor({
             commandDefs,
             cwd,
-            columns: childColumns(
-                commandDefs.map((c) => c.label),
-                stdout?.columns ?? 80,
-                timestamps,
-            ),
+            columns: childColumns(labels, columns, timestamps),
             autoRestart,
             forceColor: true,
             handlers: {
@@ -133,27 +213,18 @@ export function useProcesses({
 
                 onData({ index, chunk }) {
                     if (!timestamps) {
-                        outputBuffersRef.current[index] += chunk;
-                    }
+                        const parts = (
+                            outputPendingRef.current[index] + chunk
+                        ).split("\n");
 
-                    let newLines = 0;
+                        outputPendingRef.current[index] = parts.pop() as string;
 
-                    for (let c = 0; c < chunk.length; c++) {
-                        if (chunk[c] === "\n") {
-                            newLines++;
+                        for (const part of parts) {
+                            pushRows(
+                                index,
+                                wrapLine(part, wrapWidthRef.current.tabbed),
+                            );
                         }
-                    }
-
-                    outputLineCountsRef.current[index] += newLines;
-
-                    if (outputLineCountsRef.current[index] > bufferSize * 1.5) {
-                        const bufLines =
-                            outputBuffersRef.current[index].split("\n");
-
-                        outputBuffersRef.current[index] = bufLines
-                            .slice(-bufferSize)
-                            .join("\n");
-                        outputLineCountsRef.current[index] = bufferSize;
                     }
 
                     triggerRender();
@@ -193,8 +264,11 @@ export function useProcesses({
                     );
                     const ts = timestamps ? formatTimestamp(time) : "";
 
-                    outputBuffersRef.current[index] = `${ts}${msg}\n`;
-                    outputLineCountsRef.current[index] = 2;
+                    outputRowsRef.current[index] = wrapLine(
+                        `${ts}${msg}`,
+                        wrapWidthRef.current.tabbed,
+                    );
+                    outputPendingRef.current[index] = "";
 
                     streamLinesRef.current.push({
                         cmdIndex: index,
@@ -259,8 +333,8 @@ export function useProcesses({
             );
             const ts = timestamps ? formatTimestamp(now) : "";
 
-            outputBuffersRef.current[index] = `${ts}${msg}`;
-            outputLineCountsRef.current[index] = 1;
+            outputRowsRef.current[index] = [];
+            outputPendingRef.current[index] = `${ts}${msg}`;
 
             streamLinesRef.current.push({ cmdIndex: index, text: msg, ts });
         },
@@ -272,7 +346,8 @@ export function useProcesses({
     }, []);
 
     return {
-        outputBuffersRef,
+        outputRowsRef,
+        outputPendingRef,
         streamLinesRef,
         failedProcs,
         restartProcess,

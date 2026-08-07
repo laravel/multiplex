@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { childColumns, hexToRgb, sanitizeTitle, sidebarWidth } from "./util.js";
+import { stripAnsi } from "./search.js";
+import {
+    childColumns,
+    formatStreamContinuation,
+    formatStreamLabel,
+    hexToRgb,
+    sanitizeTitle,
+    sidebarWidth,
+    wrapLine,
+} from "./util.js";
 
 describe("hexToRgb", () => {
     test("parses basic hex colors", () => {
@@ -76,6 +85,90 @@ describe("childColumns", () => {
                 }
             }
         }
+    });
+});
+
+describe("wrapLine", () => {
+    test("leaves a line that already fits as a single row", () => {
+        assert.deepEqual(wrapLine("short", 20), ["short"]);
+        assert.deepEqual(wrapLine("", 20), [""]);
+        assert.deepEqual(wrapLine("x".repeat(20), 20), ["x".repeat(20)]);
+    });
+
+    // The line that started this: laravel-vite-plugin emits it on boot and it
+    // does not fit the tabbed pane on any terminal anyone actually has.
+    test("splits the fontaine warning rather than losing its second half", () => {
+        const warning =
+            '[laravel:fonts] Optimized font fallbacks require the optional "fontaine" package. Install it, or set "optimizedFallbacks: false" on your fonts to disable the feature.';
+
+        const rows = wrapLine(warning, 97);
+
+        assert.equal(rows.length, 2);
+        assert.ok(rows.every((r) => r.length <= 97));
+        assert.equal(rows.join("").replace(/ {2,}/g, " "), warning);
+        assert.ok(rows[1].includes("optimizedFallbacks"));
+    });
+
+    test("never emits a row wider than the pane", () => {
+        const samples = [
+            "a".repeat(500),
+            `https://example.com/${"segment/".repeat(40)}`,
+            "  ➜  Local:   http://localhost:5173/",
+            "\x1b[36mcolored\x1b[39m ".repeat(30),
+        ];
+
+        for (const width of [20, 40, 97]) {
+            for (const sample of samples) {
+                for (const row of wrapLine(sample, width)) {
+                    assert.ok(
+                        stripAnsi(row).length <= width,
+                        `row wider than ${width}: ${JSON.stringify(row)}`,
+                    );
+                }
+            }
+        }
+    });
+
+    test("measures display width, not escape codes", () => {
+        const colored = `\x1b[31m${"x".repeat(20)}\x1b[39m`;
+
+        assert.deepEqual(wrapLine(colored, 20), [colored]);
+    });
+
+    test("carries the active color onto continuation rows", () => {
+        const rows = wrapLine(`\x1b[31m${"x".repeat(40)}\x1b[39m`, 20);
+
+        assert.equal(rows.length, 2);
+        assert.ok(rows[1].startsWith("\x1b[31m"));
+    });
+
+    test("keeps leading indentation, so stack traces stay readable", () => {
+        const rows = wrapLine(`    at fn (${"a/".repeat(30)}f.js:1:2)`, 30);
+
+        assert.ok(rows.length > 1);
+        assert.ok(rows[0].startsWith("    at fn"));
+    });
+
+    // A pane can be reported as zero width mid-resize; wrapping to it would spin.
+    test("gives up rather than wrapping to a useless width", () => {
+        assert.deepEqual(wrapLine("anything", 0), ["anything"]);
+        assert.deepEqual(wrapLine("anything", -5), ["anything"]);
+    });
+});
+
+describe("formatStreamContinuation", () => {
+    test("is exactly as wide as the label prefix it stands in for", () => {
+        for (const maxLabelLen of [1, 4, 12, 40]) {
+            assert.equal(
+                stripAnsi(formatStreamContinuation(maxLabelLen, true)).length,
+                stripAnsi(formatStreamLabel("a", "#ffffff", maxLabelLen, true))
+                    .length,
+            );
+        }
+    });
+
+    test("keeps the rule but drops the label", () => {
+        assert.equal(formatStreamContinuation(4, false), "     │ ");
     });
 });
 

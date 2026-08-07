@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.2.2 - 2026-08-07
+
+### What's Changed
+
+* Wrap long lines according to COLUMNS by [@joetannenbaum](https://github.com/joetannenbaum) in https://github.com/laravel/multiplex/pull/5
+
+**Full Changelog**: https://github.com/laravel/multiplex/compare/v0.2.1...v0.2.2
+
 ## v0.2.1 - 2026-08-06
 
 ### What's Changed

@@ -26,8 +26,8 @@ describe("parseCommandDef", () => {
         ]);
     });
 
-    test("parses label:#hex,command", () => {
-        assert.deepEqual(parse("server:#fb7185,php artisan serve"), [
+    test("parses label@#hex,command", () => {
+        assert.deepEqual(parse("server@#fb7185,php artisan serve"), [
             {
                 label: "server",
                 color: "#fb7185",
@@ -36,8 +36,8 @@ describe("parseCommandDef", () => {
         ]);
     });
 
-    test("parses label:name,command", () => {
-        assert.deepEqual(parse("server:red,php artisan serve"), [
+    test("parses label@name,command", () => {
+        assert.deepEqual(parse("server@red,php artisan serve"), [
             {
                 label: "server",
                 color: "red",
@@ -47,8 +47,8 @@ describe("parseCommandDef", () => {
     });
 
     test("normalizes the color it stores", () => {
-        assert.equal(parse("a:#93C5FD,echo hi")[0].color, "#93c5fd");
-        assert.equal(parse("a:REDBRIGHT,echo hi")[0].color, "redBright");
+        assert.equal(parse("a@#93C5FD,echo hi")[0].color, "#93c5fd");
+        assert.equal(parse("a@REDBRIGHT,echo hi")[0].color, "redBright");
     });
 
     // Only the first comma is structural, so everything else belongs to the
@@ -56,17 +56,17 @@ describe("parseCommandDef", () => {
     // color off the label instead of giving it a positional slot.
     test("keeps commas in the command", () => {
         assert.equal(parse("a,echo A,B,C")[0].command, "echo A,B,C");
-        assert.equal(parse("a:#86efac,echo A,B,C")[0].command, "echo A,B,C");
+        assert.equal(parse("a@#86efac,echo A,B,C")[0].command, "echo A,B,C");
     });
 
     test("never reads the command as a color", () => {
         assert.equal(parse("a,red")[0].command, "red");
         assert.equal(parse("a,red,--watch")[0].command, "red,--watch");
-        assert.equal(parse("a:blue,red")[0].color, "blue");
-        assert.equal(parse("a:blue,red")[0].command, "red");
+        assert.equal(parse("a@blue,red")[0].color, "blue");
+        assert.equal(parse("a@blue,red")[0].command, "red");
     });
 
-    test("leaves colons and hashes in the command alone", () => {
+    test("leaves colons, hashes and ats in the command alone", () => {
         assert.equal(
             parse("a,curl http://x/#frag")[0].command,
             "curl http://x/#frag",
@@ -76,9 +76,10 @@ describe("parseCommandDef", () => {
             "php artisan queue:listen",
         );
         assert.equal(
-            parse("q:cyan,php artisan queue:listen")[0].command,
+            parse("q@cyan,php artisan queue:listen")[0].command,
             "php artisan queue:listen",
         );
+        assert.equal(parse("a,npx pkg@1.2.3")[0].command, "npx pkg@1.2.3");
     });
 
     test("accumulates across calls", () => {
@@ -90,7 +91,7 @@ describe("parseCommandDef", () => {
     });
 
     test("leaves the color unset unless it was given explicitly", () => {
-        const defs = parse("a,echo a", `b:${DEFAULT_COLORS[2]},echo b`);
+        const defs = parse("a,echo a", `b@${DEFAULT_COLORS[2]},echo b`);
 
         assert.equal(defs[0].color, undefined);
         assert.equal(defs[1].color, DEFAULT_COLORS[2]);
@@ -100,39 +101,49 @@ describe("parseCommandDef", () => {
         invalid("onlyonepart");
         invalid("");
         invalid("a,");
-        invalid("a:red,");
+        invalid("a@red,");
     });
 
     test("rejects a value with no label", () => {
         invalid(",echo hi");
-        invalid(":red,echo hi");
     });
 
     // Regression: these used to silently drop the #token and run the rest of
     // the value as the command.
     test("rejects a malformed color instead of dropping it", () => {
-        invalid("a:#fff,echo hi");
-        invalid("a:#zzzzzz,echo hi");
-        invalid("a:#3 tasks,echo hi");
-        invalid("a:#93c5fdd,echo hi");
-        invalid("a:#,echo hi");
-        invalid("a:burgundy,echo hi");
-        invalid("a:bgRed,echo hi");
+        invalid("a@#fff,echo hi");
+        invalid("a@#zzzzzz,echo hi");
+        invalid("a@#3 tasks,echo hi");
+        invalid("a@#93c5fdd,echo hi");
+        invalid("a@#,echo hi");
+        invalid("a@burgundy,echo hi");
+        invalid("a@bgRed,echo hi");
     });
 
-    // A colon in the label is indistinguishable from a color that we don't
-    // recognize, so it has to be an error rather than a silent misparse.
-    test("rejects a colon in the label", () => {
-        invalid("api:v2,echo hi");
+    // The reason the separator is @ rather than the colon it used to be: artisan
+    // labels are named after the commands they run.
+    test("keeps a colon in the label", () => {
+        assert.deepEqual(parse("queue:work,php artisan queue:work"), [
+            { label: "queue:work", command: "php artisan queue:work" },
+        ]);
+        assert.deepEqual(parse("queue:work@cyan,php artisan queue:work"), [
+            {
+                label: "queue:work",
+                color: "cyan",
+                command: "php artisan queue:work",
+            },
+        ]);
     });
 
-    // The old positional color slot would otherwise be read as the first word of
-    // the command, and the run would look like it started fine.
-    test("points the old label,#color,command form at the new one", () => {
-        assert.throws(() => parseCommandDef("a,#93c5fd,echo hi", []), {
-            code: "commander.invalidArgument",
-            message: /a:#93c5fd,echo hi/,
-        });
+    // Last @ wins, and a leading one is never the separator, so a scoped package
+    // name is a usable label either way.
+    test("keeps an at in the label", () => {
+        assert.equal(parse("@scope/pkg,pnpm run dev")[0].label, "@scope/pkg");
+        assert.equal(
+            parse("@scope/pkg@green,pnpm run dev")[0].label,
+            "@scope/pkg",
+        );
+        assert.equal(parse("@scope/pkg@green,pnpm run dev")[0].color, "green");
     });
 });
 

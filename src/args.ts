@@ -1,51 +1,70 @@
 import { InvalidArgumentError } from "commander";
+import { DEFAULT_COLORS, normalizeColor } from "./color.js";
 import type { CommandDef, CommandInput } from "./types.js";
 
-export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const FORMAT = "Expected label,command or label:color,command";
 
-export const DEFAULT_COLORS = [
-    "#93c5fd",
-    "#c4b5fd",
-    "#fb7185",
-    "#fdba74",
-    "#86efac",
-    "#fcd34d",
-];
+const badColor = (value: string, label?: string) =>
+    `"${value}" is not a valid color${label ? ` for "${label}"` : ""}. Expected a 6-digit hex value such as #93c5fd, or a name such as red or blueBright.`;
 
+// The old label,#color,command form, rejected rather than still accepted: the
+// current format reads that color as the first word of the command, so the run
+// would otherwise look like it started fine.
+const LEGACY_COLOR_SLOT = /^#[0-9a-fA-F]{6},/;
+
+/**
+ * One CLI positional onto a CommandInput. The color attaches to the label rather
+ * than sitting in a slot of its own, so only the first comma is structural:
+ * everything after it is the command, whether it holds commas, colons or a word
+ * that happens to name a color.
+ */
 export function parseCommandDef(
     value: string,
     previous: CommandInput[],
 ): CommandInput[] {
-    const parts = value.split(",");
+    const split = value.indexOf(",");
 
-    if (parts.length < 2) {
+    if (split < 1) {
+        throw new InvalidArgumentError(FORMAT);
+    }
+
+    const head = value.slice(0, split);
+    const command = value.slice(split + 1);
+
+    if (!command) {
         throw new InvalidArgumentError(
-            "Expected label,command or label,#color,command",
+            `"${head}" has no command after it. ${FORMAT}`,
         );
     }
 
-    const label = parts[0];
+    if (LEGACY_COLOR_SLOT.test(command)) {
+        const end = command.indexOf(",");
 
-    if (parts[1].startsWith("#")) {
-        if (parts.length < 3) {
-            throw new InvalidArgumentError(
-                `The color ${parts[1]} is set but no command follows it.`,
-            );
-        }
-
-        if (!HEX_COLOR.test(parts[1])) {
-            throw new InvalidArgumentError(
-                `"${parts[1]}" is not a valid color. Expected a 6-digit hex color such as #93c5fd.`,
-            );
-        }
-
-        return [
-            ...previous,
-            { label, color: parts[1], command: parts.slice(2).join(",") },
-        ];
+        throw new InvalidArgumentError(
+            `Colors now attach to the label: write ${head}:${command.slice(0, end)},${command.slice(end + 1)}`,
+        );
     }
 
-    return [...previous, { label, command: parts.slice(1).join(",") }];
+    const colon = head.indexOf(":");
+
+    if (colon === -1) {
+        return [...previous, { label: head, command }];
+    }
+
+    const label = head.slice(0, colon);
+    const color = normalizeColor(head.slice(colon + 1));
+
+    if (!label) {
+        throw new InvalidArgumentError(`"${head}" has no label. ${FORMAT}`);
+    }
+
+    if (!color) {
+        throw new InvalidArgumentError(
+            `${badColor(head.slice(colon + 1))} Everything after the first colon is the color, so a label cannot contain one.`,
+        );
+    }
+
+    return [...previous, { label, color, command }];
 }
 
 export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
@@ -55,7 +74,7 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
 
     const used = new Set(
         commands
-            .map((c) => c.color?.toLowerCase())
+            .map((c) => (c.color ? normalizeColor(c.color) : undefined))
             .filter((c): c is string => Boolean(c)),
     );
 
@@ -72,15 +91,13 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
             );
         }
 
-        const explicit = cmd.color?.toLowerCase();
+        if (cmd.color !== undefined) {
+            const explicit = normalizeColor(cmd.color);
 
-        if (explicit !== undefined && !HEX_COLOR.test(explicit)) {
-            throw new Error(
-                `"${cmd.color}" is not a valid color for "${cmd.label}". Expected a 6-digit hex color such as #93c5fd.`,
-            );
-        }
+            if (!explicit) {
+                throw new Error(badColor(cmd.color, cmd.label));
+            }
 
-        if (explicit) {
             return { label: cmd.label, color: explicit, command: cmd.command };
         }
 

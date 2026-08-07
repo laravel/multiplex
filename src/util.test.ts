@@ -5,30 +5,10 @@ import {
     childColumns,
     formatStreamContinuation,
     formatStreamLabel,
-    hexToRgb,
     sanitizeTitle,
     sidebarWidth,
     wrapLine,
 } from "./util.js";
-
-describe("hexToRgb", () => {
-    test("parses basic hex colors", () => {
-        assert.deepEqual(hexToRgb("#000000"), [0, 0, 0]);
-        assert.deepEqual(hexToRgb("#ffffff"), [255, 255, 255]);
-        assert.deepEqual(hexToRgb("#ff0000"), [255, 0, 0]);
-        assert.deepEqual(hexToRgb("#00ff00"), [0, 255, 0]);
-        assert.deepEqual(hexToRgb("#0000ff"), [0, 0, 255]);
-    });
-
-    test("parses the default palette colors", () => {
-        assert.deepEqual(hexToRgb("#93c5fd"), [147, 197, 253]);
-        assert.deepEqual(hexToRgb("#fb7185"), [251, 113, 133]);
-    });
-
-    test("handles uppercase hex", () => {
-        assert.deepEqual(hexToRgb("#FF00FF"), [255, 0, 255]);
-    });
-});
 
 describe("childColumns", () => {
     const labels = ["server", "queue", "vite"];
@@ -153,6 +133,38 @@ describe("wrapLine", () => {
     test("gives up rather than wrapping to a useless width", () => {
         assert.deepEqual(wrapLine("anything", 0), ["anything"]);
         assert.deepEqual(wrapLine("anything", -5), ["anything"]);
+    });
+});
+
+describe("formatStreamLabel", () => {
+    test("writes a hex color as a truecolor sequence", () => {
+        assert.match(
+            formatStreamLabel("a", "#93c5fd", 1, true),
+            /\x1b\[38;2;147;197;253m/,
+        );
+    });
+
+    // A name has to reach the terminal as its SGR code so it picks up the theme's
+    // idea of the color, not ours.
+    test("writes a named color as its SGR code", () => {
+        assert.match(formatStreamLabel("a", "red", 1, true), /\x1b\[31m/);
+        assert.match(
+            formatStreamLabel("a", "blueBright", 1, true),
+            /\x1b\[94m/,
+        );
+    });
+
+    test("emits no color at all when asked not to", () => {
+        assert.equal(formatStreamLabel("a", "red", 3, false), "  a │ ");
+    });
+
+    test("is the same width whatever form the color took", () => {
+        for (const color of ["#93c5fd", "red", "blueBright"]) {
+            assert.equal(
+                stripAnsi(formatStreamLabel("api", color, 6, true)),
+                "   api │ ",
+            );
+        }
     });
 });
 

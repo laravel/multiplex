@@ -35,10 +35,12 @@ Each command is passed as a positional argument in the format:
 
 ```
 label,command
-label,#color,command
+label:color,command
 ```
 
-Colors are optional 6-digit hex values such as `#93c5fd`. If omitted, they're assigned automatically from a built-in palette, avoiding duplicates. A malformed color is an error rather than being ignored, and shorthand like `#fff` is not accepted.
+Only the first comma is structural: everything after it is the command, so commas, colons and hashes inside it need no escaping.
+
+The color is optional and attaches to the label with a colon. It can be a 6-digit hex value such as `#93c5fd`, or one of the names `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `gray` (`grey`, `blackBright`) and the `*Bright` variants of the other seven. A name is left to your terminal's theme to resolve; a hex value is sent as-is. If the color is omitted it's assigned from a built-in palette, avoiding duplicates. A malformed color is an error rather than being ignored, and shorthand like `#fff` is not accepted. Because the color is separated by the colon, a label cannot contain one.
 
 ### Examples
 
@@ -47,7 +49,10 @@ Colors are optional 6-digit hex values such as `#93c5fd`. If omitted, they're as
 multiplex 'server,php artisan serve' 'queue,php artisan queue:listen' 'vite,pnpm run dev'
 
 # With custom colors
-multiplex 'server,#93c5fd,php artisan serve' 'queue,#fb7185,php artisan queue:listen'
+multiplex 'server:#93c5fd,php artisan serve' 'queue:#fb7185,php artisan queue:listen'
+
+# Or with color names
+multiplex 'server:blue,php artisan serve' 'queue:magentaBright,php artisan queue:listen'
 
 # Set the terminal tab title
 multiplex --title "Admin" 'server,php artisan serve' 'queue,php artisan queue:listen'
@@ -134,6 +139,7 @@ const code = await multiplex({
     commands: [
         { label: "server", command: "php artisan serve" },
         { label: "queue", color: "#fb7185", command: "php artisan queue:listen" },
+        { label: "vite", color: "cyan", command: "pnpm run dev" },
     ],
     stream: true,
 });
@@ -151,7 +157,7 @@ Options are validated before anything is written to the terminal, so an invalid 
 
 | Option | Type | Description | Default |
 | --- | --- | --- | --- |
-| `commands` | `{ label, command, color? }[]` | Required, at least one. `color` is an optional 6-digit hex value | |
+| `commands` | `{ label, command, color? }[]` | Required, at least one. `color` is an optional 6-digit hex value or color name | |
 | `title` | `string` | Set the terminal tab title | |
 | `cwd` | `string` | Set the working directory (must exist) | `process.cwd()` |
 | `inline` | `boolean` | Print output inline instead of rendering the TUI | On when not a TTY |

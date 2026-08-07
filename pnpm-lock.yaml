@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      ansi-styles:
+        specifier: ^6.2.3
+        version: 6.2.3
       commander:
         specifier: ^15.0.0
         version: 15.0.0

@@ -14,7 +14,7 @@ import {
     sanitizeTitle,
 } from "./util.js";
 
-export { DEFAULT_COLORS } from "./args.js";
+export { DEFAULT_COLORS } from "./color.js";
 export type { CommandInput, MultiplexOptions } from "./types.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"] as const;

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.3.1 - 2026-08-07
+
+### What's Changed
+
+* Bump the npm group across 1 directory with 7 updates by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/multiplex/pull/6
+
+**Full Changelog**: https://github.com/laravel/multiplex/compare/v0.3.0...v0.3.1
+
 ## v0.3.0 - 2026-08-07
 
 ### What's Changed

@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { contrastText } from "./color.js";
 import { highlightLine, indexMatches } from "./search.js";
 import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
@@ -744,22 +745,27 @@ export function App({
                         const spinnerChar =
                             SPINNER_FRAMES[animFrame % SPINNER_FRAMES.length];
 
+                        // The selected tab is filled with the command's own
+                        // color, so everything drawn on it has to be legible
+                        // against that fill rather than against the background.
+                        const onFill = contrastText(cmd.color);
+
                         let indicator: string;
                         let indicatorColor: string;
                         let dim = false;
 
                         if (isRestarting) {
                             indicator = spinnerChar;
-                            indicatorColor = selected ? "#000000" : "#e5c07b";
+                            indicatorColor = selected ? onFill : "#e5c07b";
                         } else if (failed) {
                             indicator = "✕";
-                            indicatorColor = "#ef4444";
+                            indicatorColor = selected ? onFill : "#ef4444";
                         } else if (isSpinning) {
                             indicator = spinnerChar;
-                            indicatorColor = selected ? "#000000" : cmd.color;
+                            indicatorColor = selected ? onFill : cmd.color;
                         } else {
                             indicator = i < 9 ? `${i + 1}` : " ";
-                            indicatorColor = selected ? "#000000" : "#555555";
+                            indicatorColor = selected ? onFill : "#555555";
                             dim = !selected;
                         }
 
@@ -782,7 +788,7 @@ export function App({
                                     backgroundColor={bg}
                                     color={
                                         selected
-                                            ? "#000000"
+                                            ? onFill
                                             : failed
                                               ? "#ef4444"
                                               : cmd.color

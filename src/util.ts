@@ -1,11 +1,6 @@
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
-
-export const hexToRgb = (hex: string): [number, number, number] => [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-];
+import { colorOpen } from "./color.js";
 
 export const systemMsg = (text: string) => `\x1b[2m\x1b[3m${text}\x1b[0m`;
 
@@ -154,9 +149,7 @@ export function formatStreamLabel(
         return `${padding}${label} │ `;
     }
 
-    const [r, g, b] = hexToRgb(color);
-
-    return `\x1b[1;38;2;${r};${g};${b}m${padding}${label}\x1b[0m\x1b[90m │ \x1b[0m`;
+    return `\x1b[1m${colorOpen(color)}${padding}${label}\x1b[0m\x1b[90m │ \x1b[0m`;
 }
 
 /**

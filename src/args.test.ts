@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
-    DEFAULT_COLORS,
     normalizeCommands,
     parseCommandDef,
     parsePositiveInt,
 } from "./args.js";
+import { DEFAULT_COLORS } from "./color.js";
 import type { CommandInput } from "./types.js";
 
 const parse = (...values: string[]) =>
@@ -26,8 +26,8 @@ describe("parseCommandDef", () => {
         ]);
     });
 
-    test("parses label,#color,command", () => {
-        assert.deepEqual(parse("server,#fb7185,php artisan serve"), [
+    test("parses label:#hex,command", () => {
+        assert.deepEqual(parse("server:#fb7185,php artisan serve"), [
             {
                 label: "server",
                 color: "#fb7185",
@@ -36,21 +36,48 @@ describe("parseCommandDef", () => {
         ]);
     });
 
-    test("accepts uppercase hex", () => {
-        assert.equal(parse("a,#93C5FD,echo hi")[0].color, "#93C5FD");
+    test("parses label:name,command", () => {
+        assert.deepEqual(parse("server:red,php artisan serve"), [
+            {
+                label: "server",
+                color: "red",
+                command: "php artisan serve",
+            },
+        ]);
     });
 
-    // The command is everything after the label (and optional color), so commas
-    // inside it have to survive.
+    test("normalizes the color it stores", () => {
+        assert.equal(parse("a:#93C5FD,echo hi")[0].color, "#93c5fd");
+        assert.equal(parse("a:REDBRIGHT,echo hi")[0].color, "redBright");
+    });
+
+    // Only the first comma is structural, so everything else belongs to the
+    // command however it is punctuated. This is the whole point of hanging the
+    // color off the label instead of giving it a positional slot.
     test("keeps commas in the command", () => {
         assert.equal(parse("a,echo A,B,C")[0].command, "echo A,B,C");
-        assert.equal(parse("a,#86efac,echo A,B,C")[0].command, "echo A,B,C");
+        assert.equal(parse("a:#86efac,echo A,B,C")[0].command, "echo A,B,C");
     });
 
-    test("only treats a leading # as a color", () => {
+    test("never reads the command as a color", () => {
+        assert.equal(parse("a,red")[0].command, "red");
+        assert.equal(parse("a,red,--watch")[0].command, "red,--watch");
+        assert.equal(parse("a:blue,red")[0].color, "blue");
+        assert.equal(parse("a:blue,red")[0].command, "red");
+    });
+
+    test("leaves colons and hashes in the command alone", () => {
         assert.equal(
             parse("a,curl http://x/#frag")[0].command,
             "curl http://x/#frag",
+        );
+        assert.equal(
+            parse("q,php artisan queue:listen")[0].command,
+            "php artisan queue:listen",
+        );
+        assert.equal(
+            parse("q:cyan,php artisan queue:listen")[0].command,
+            "php artisan queue:listen",
         );
     });
 
@@ -63,35 +90,49 @@ describe("parseCommandDef", () => {
     });
 
     test("leaves the color unset unless it was given explicitly", () => {
-        const defs = parse("a,echo a", `b,${DEFAULT_COLORS[2]},echo b`);
+        const defs = parse("a,echo a", `b:${DEFAULT_COLORS[2]},echo b`);
 
         assert.equal(defs[0].color, undefined);
         assert.equal(defs[1].color, DEFAULT_COLORS[2]);
     });
 
-    test("every palette color is a 6-digit hex", () => {
-        for (const color of DEFAULT_COLORS) {
-            assert.match(color, /^#[0-9a-f]{6}$/);
-        }
-    });
-
     test("rejects a value with no command", () => {
         invalid("onlyonepart");
         invalid("");
+        invalid("a,");
+        invalid("a:red,");
     });
 
-    test("rejects a color with no command after it", () => {
-        invalid("a,#93c5fd");
+    test("rejects a value with no label", () => {
+        invalid(",echo hi");
+        invalid(":red,echo hi");
     });
 
     // Regression: these used to silently drop the #token and run the rest of
     // the value as the command.
     test("rejects a malformed color instead of dropping it", () => {
-        invalid("a,#fff,echo hi");
-        invalid("a,#zzzzzz,echo hi");
-        invalid("a,#3 tasks,echo hi");
-        invalid("a,#93c5fdd,echo hi");
-        invalid("a,#,echo hi");
+        invalid("a:#fff,echo hi");
+        invalid("a:#zzzzzz,echo hi");
+        invalid("a:#3 tasks,echo hi");
+        invalid("a:#93c5fdd,echo hi");
+        invalid("a:#,echo hi");
+        invalid("a:burgundy,echo hi");
+        invalid("a:bgRed,echo hi");
+    });
+
+    // A colon in the label is indistinguishable from a color that we don't
+    // recognize, so it has to be an error rather than a silent misparse.
+    test("rejects a colon in the label", () => {
+        invalid("api:v2,echo hi");
+    });
+
+    // The old positional color slot would otherwise be read as the first word of
+    // the command, and the run would look like it started fine.
+    test("points the old label,#color,command form at the new one", () => {
+        assert.throws(() => parseCommandDef("a,#93c5fd,echo hi", []), {
+            code: "commander.invalidArgument",
+            message: /a:#93c5fd,echo hi/,
+        });
     });
 });
 
@@ -117,15 +158,31 @@ describe("normalizeCommands", () => {
         );
     });
 
-    test("keeps explicit colors, lowercased", () => {
+    test("keeps explicit colors, normalized", () => {
         const defs = normalizeCommands([
             { label: "a", command: "echo a", color: "#fb7185" },
             { label: "b", command: "echo b", color: "#86EFAC" },
+            { label: "c", command: "echo c", color: "cyan" },
+            { label: "d", command: "echo d", color: "MAGENTABRIGHT" },
         ]);
 
         assert.deepEqual(
             defs.map((d) => d.color),
-            ["#fb7185", "#86efac"],
+            ["#fb7185", "#86efac", "cyan", "magentaBright"],
+        );
+    });
+
+    // Names are not in the palette, so they take nothing out of it.
+    test("auto-assignment ignores explicit names", () => {
+        const defs = normalizeCommands([
+            { label: "a", command: "echo a", color: "red" },
+            { label: "b", command: "echo b" },
+            { label: "c", command: "echo c" },
+        ]);
+
+        assert.deepEqual(
+            defs.map((d) => d.color),
+            ["red", DEFAULT_COLORS[0], DEFAULT_COLORS[1]],
         );
     });
 
@@ -213,7 +270,14 @@ describe("normalizeCommands", () => {
     });
 
     test("rejects a malformed color", () => {
-        for (const color of ["#fff", "#zzzzzz", "#93c5fdd", "#", "red"]) {
+        for (const color of [
+            "#fff",
+            "#zzzzzz",
+            "#93c5fdd",
+            "#",
+            "burgundy",
+            "bgRed",
+        ]) {
             assert.throws(
                 () => normalizeCommands([{ label: "a", command: "x", color }]),
                 /is not a valid color/,

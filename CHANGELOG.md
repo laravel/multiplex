@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.4.1 - 2026-08-11
+
+### What's Changed
+
+* Bump the npm group with 4 updates by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/multiplex/pull/9
+* Fall back to inline mode when the terminal is too small by [@joetannenbaum](https://github.com/joetannenbaum) in https://github.com/laravel/multiplex/pull/10
+
+**Full Changelog**: https://github.com/laravel/multiplex/compare/v0.4.0...v0.4.1
+
 ## v0.4.0 - 2026-08-07
 
 ### What's Changed

@@ -33,8 +33,6 @@ const STREAM_CHROME = 4;
 const TABBED_CHROME = 6;
 const SIDEBAR_CHROME = 4;
 
-export const MIN_ROWS = STREAM_CHROME + MIN_OUTPUT_LINES;
-
 /**
  * Rows needed before the tabbed layout is worth using. The sidebar renders one
  * row per command and silently drops the overflow, so it has to fit every label
@@ -55,6 +53,25 @@ const STREAM_PADDING = 1;
 // The " │ " rule that separates the label from the output in stream mode.
 const STREAM_LABEL_EXTRA = 3;
 const MIN_CHILD_COLUMNS = 20;
+
+/**
+ * The smallest terminal the TUI is worth rendering into, measured against the
+ * stream layout because that is the one a small terminal falls back to. Rows:
+ * its chrome plus enough lines to be reading output rather than a header.
+ * Columns: its padding, scrollbar and label rule plus the same floor every
+ * width calculation here clamps to.
+ *
+ * The label itself is left out of the column figure on purpose. This is about
+ * the terminal being too small for any TUI, not about this particular set of
+ * commands — long labels squeeze the pane, and `streamTextWidth` already
+ * clamps for that, but they should not decide whether there is a TUI at all.
+ */
+export const MIN_ROWS = STREAM_CHROME + MIN_OUTPUT_LINES;
+export const MIN_COLUMNS =
+    STREAM_PADDING + SCROLLBAR_WIDTH + STREAM_LABEL_EXTRA + MIN_CHILD_COLUMNS;
+
+export const fitsTui = (columns: number, rows: number) =>
+    columns >= MIN_COLUMNS && rows >= MIN_ROWS;
 
 /** Columns left for output text in the tabbed content pane. */
 export function tabbedTextWidth(

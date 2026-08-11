@@ -21,7 +21,7 @@ npx @laravel/multiplex 'server,php artisan serve' 'queue,php artisan queue:liste
 ## Requirements
 
 - **Node 22.13 or later.**
-- **An interactive terminal, for the TUI.** Both stdin and stdout must be a TTY. Without one, multiplex runs in [inline mode](#inline-mode) instead of failing.
+- **An interactive terminal, for the TUI.** Both stdin and stdout must be a TTY, and the window has to be at least 26 columns by 8 rows. Without either, multiplex runs in [inline mode](#inline-mode) instead of failing.
 - **Non-interactive commands.** Child processes are spawned without stdin, so anything that prompts for input — `php artisan tinker`, a migration confirmation — won't work.
 - **A stable terminal width.** Children are told how wide they are via `COLUMNS` when they start, and that can't be updated afterwards. Resizing the terminal leaves already-running commands sizing their output to the old width; press `r` to restart one against the new width.
 
@@ -87,7 +87,7 @@ multiplex --no-restart 'build,pnpm run build'
 
 Inline mode is multiplex without the TUI: no alternate screen, no keyboard handling, no tabs or search. Every line is written straight to your terminal as it arrives, prefixed with the command's colored label — the same interleaved format the TUI flushes to scrollback when you quit. Your existing scrollback is left alone, output scrolls normally, and `Ctrl-C` still tears down the whole process tree.
 
-It's used automatically whenever stdin or stdout isn't a TTY, so `multiplex ... | tee log`, `make dev` and CI jobs all work. Use `-i` to ask for it in a real terminal.
+It's used automatically whenever stdin or stdout isn't a TTY, so `multiplex ... | tee log`, `make dev` and CI jobs all work. It's also used when the terminal is smaller than 26 columns by 8 rows, which is too small to draw a layout in — multiplex says so on stderr and carries on. Use `-i` to ask for it in a real terminal.
 
 A few things behave differently from the TUI, because the TUI's defaults are wrong for a pipeline:
 
@@ -153,7 +153,7 @@ Every `command` is run through `sh -c`, so it is a shell string, not an argv arr
 
 `multiplex()` takes over the terminal for the duration of the call: it enters the alternate screen, installs its own `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT` handlers, and renders the TUI. It resolves with the same exit code the CLI would have used — `0` normally, `1` if rendering failed. By then the terminal is restored, every child process is dead, the buffered output has been flushed to scrollback, and the signal handlers it installed have been removed, so the calling process is free to carry on.
 
-If stdin or stdout isn't a TTY it runs [inline](#inline-mode) instead, resolving with the first failing command's exit code. Set `inline: true` to ask for that in a real terminal.
+If stdin or stdout isn't a TTY, or the terminal is smaller than 26 columns by 8 rows, it runs [inline](#inline-mode) instead, resolving with the first failing command's exit code. Set `inline: true` to ask for that in a real terminal.
 
 Options are validated before anything is written to the terminal, so an invalid option throws with the screen untouched.
 
@@ -219,7 +219,7 @@ Use `--no-restart` to turn it off entirely, for one-shot commands like builds or
 
 ## Features
 
-- **Inline mode** when there's no TTY, so pipes and CI get labelled output and a real exit code instead of an error
+- **Inline mode** when there's no TTY or no room for one, so pipes, CI and tiny terminals get labelled output and a real exit code instead of an error
 - **JSON output** as newline-delimited events, for anything that needs to parse a run
 - **Tabbed view** with a sidebar showing all running commands
 - **Stream mode** for interleaved output with colored labels, with per-command filtering

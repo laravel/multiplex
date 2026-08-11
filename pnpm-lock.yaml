@@ -16,10 +16,10 @@ importers:
         version: 15.0.0
       ink:
         specifier: ^7.1.0
-        version: 7.1.0(@types/react@19.2.17)(react@19.2.7)
+        version: 7.1.1(@types/react@19.2.18)(react@19.2.8)
       react:
         specifier: ^19.2.7
-        version: 19.2.7
+        version: 19.2.8
       string-width:
         specifier: ^8.2.2
         version: 8.2.2
@@ -32,10 +32,10 @@ importers:
         version: 2.5.6
       '@types/node':
         specifier: ^26.1.1
-        version: 26.1.1
+        version: 26.1.2
       '@types/react':
         specifier: ^19.2.17
-        version: 19.2.17
+        version: 19.2.18
       tsx:
         specifier: ^4.23.5
         version: 4.23.5
@@ -262,11 +262,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@types/node@26.1.1':
-    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+  '@types/node@26.1.2':
+    resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
 
-  '@types/react@19.2.17':
-    resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
+  '@types/react@19.2.18':
+    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -464,8 +464,8 @@ packages:
     resolution: {integrity: sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg==}
     engines: {node: '>=12'}
 
-  ink@7.1.0:
-    resolution: {integrity: sha512-VWE6/yeLtFCJBNLflyI2OSylyXK1Rc24LuXup8Qt+icwkmmycFNdbn8IkSp6Frc0h1iA0NOvvi1ajW44U/w3Qg==}
+  ink@7.1.1:
+    resolution: {integrity: sha512-Y43xxa1ZSPvpmfLHcN5o+OdP8Rf8ykkNJEuKYOUNZKT8wXVNLFTtEm1nSDMQkfBH+YANF4Xuu0hhZ4ejqAtN2w==}
     engines: {node: '>=22'}
     peerDependencies:
       '@types/react': '>=19.2.0'
@@ -504,8 +504,8 @@ packages:
     peerDependencies:
       react: ^19.2.0
 
-  react@19.2.7:
-    resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
+  react@19.2.8:
+    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
     engines: {node: '>=0.10.0'}
 
   restore-cursor@4.0.0:
@@ -567,8 +567,8 @@ packages:
     resolution: {integrity: sha512-SGcvg80f0wUy2/fXES19feHMz8E0JoXv2uNgHOu4Dgi2OrCy1lqwFYEJz1BLbDI0exjPMe/ZdzZ/YpGECBG/aQ==}
     engines: {node: '>=20'}
 
-  ws@8.21.2:
-    resolution: {integrity: sha512-54dMVAo4WIe6SKy3vBgN+9bJZqqQ8IMRevAkOLQALhi49qkkQDQfWdAZ8KQlXiEabw88ARXXdUrlvtbKQX+aKw==}
+  ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -702,11 +702,11 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@types/node@26.1.1':
+  '@types/node@26.1.2':
     dependencies:
       undici-types: 8.3.0
 
-  '@types/react@19.2.17':
+  '@types/react@19.2.18':
     dependencies:
       csstype: 3.2.3
 
@@ -845,7 +845,7 @@ snapshots:
 
   indent-string@5.0.0: {}
 
-  ink@7.1.0(@types/react@19.2.17)(react@19.2.7):
+  ink@7.1.1(@types/react@19.2.18)(react@19.2.8):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.0
       ansi-escapes: 7.3.0
@@ -860,8 +860,8 @@ snapshots:
       indent-string: 5.0.0
       is-in-ci: 2.0.0
       patch-console: 2.0.0
-      react: 19.2.7
-      react-reconciler: 0.33.0(react@19.2.7)
+      react: 19.2.8
+      react-reconciler: 0.33.0(react@19.2.8)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 9.0.0
@@ -871,10 +871,10 @@ snapshots:
       type-fest: 5.8.0
       widest-line: 6.0.0
       wrap-ansi: 10.0.0
-      ws: 8.21.2
+      ws: 8.21.3
       yoga-layout: 3.2.1
     optionalDependencies:
-      '@types/react': 19.2.17
+      '@types/react': 19.2.18
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -893,12 +893,12 @@ snapshots:
 
   patch-console@2.0.0: {}
 
-  react-reconciler@0.33.0(react@19.2.7):
+  react-reconciler@0.33.0(react@19.2.8):
     dependencies:
-      react: 19.2.7
+      react: 19.2.8
       scheduler: 0.27.0
 
-  react@19.2.7: {}
+  react@19.2.8: {}
 
   restore-cursor@4.0.0:
     dependencies:
@@ -976,6 +976,6 @@ snapshots:
       string-width: 8.2.2
       strip-ansi: 7.2.0
 
-  ws@8.21.2: {}
+  ws@8.21.3: {}
 
   yoga-layout@3.2.1: {}

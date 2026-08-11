@@ -7,11 +7,14 @@ import { normalizeCommands } from "./args.js";
 import { runInline } from "./inline.js";
 import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
 import {
+    fitsTui,
     formatStreamContinuation,
     formatStreamLabel,
     inlineChildColumns,
+    MIN_COLUMNS,
     MIN_ROWS,
     sanitizeTitle,
+    systemMsg,
 } from "./util.js";
 
 export { DEFAULT_COLORS } from "./color.js";
@@ -76,7 +79,8 @@ function installTeardown(shutdown: () => void, onExit: () => void) {
  *
  * Renders the TUI when the terminal can support it and falls back to inline
  * output — every line printed as it arrives, no alternate screen, no input —
- * when it cannot, so a pipe or a CI job gets usable output rather than an error.
+ * when it cannot, so a pipe, a CI job or a window too small to draw a layout in
+ * gets usable output rather than an error.
  */
 export async function multiplex(options: MultiplexOptions): Promise<number> {
     const commandDefs = normalizeCommands(options.commands ?? []);
@@ -89,7 +93,11 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
     const title = options.title ? sanitizeTitle(options.title) : undefined;
     const json = options.json ?? false;
     const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-    const inline = json || (options.inline ?? false) || !interactive;
+    const columns = process.stdout.columns ?? 0;
+    const rows = process.stdout.rows ?? 0;
+    const tooSmall = interactive && !fitsTui(columns, rows);
+    const inline =
+        json || (options.inline ?? false) || !interactive || tooSmall;
 
     const cwd = resolve(options.cwd ?? process.cwd());
 
@@ -143,6 +151,14 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
 
         const uninstall = installTeardown(shutdown, killAll);
 
+        // Without a TTY inline mode is the expected outcome and needs no
+        // explanation; in a real terminal the missing TUI does.
+        if (tooSmall && !json) {
+            const notice = `Terminal is ${columns}x${rows}; the TUI needs at least ${MIN_COLUMNS}x${MIN_ROWS}. Running inline.`;
+
+            process.stderr.write(`${color ? systemMsg(notice) : notice}\n`);
+        }
+
         if (useTitle) {
             process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
         }
@@ -178,14 +194,6 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
     }
 
     async function runTui(): Promise<number> {
-        const rows = process.stdout.rows ?? 0;
-
-        if (rows < MIN_ROWS) {
-            throw new Error(
-                `multiplex needs at least ${MIN_ROWS} terminal rows, but this terminal has ${rows}. Make the window taller and try again.`,
-            );
-        }
-
         const outputRef: OutputRef = { current: [] };
 
         let instance: ReturnType<typeof render> | undefined;

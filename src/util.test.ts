@@ -3,8 +3,11 @@ import { describe, test } from "node:test";
 import { stripAnsi } from "./search.js";
 import {
     childColumns,
+    fitsTui,
     formatStreamContinuation,
     formatStreamLabel,
+    MIN_COLUMNS,
+    MIN_ROWS,
     sanitizeTitle,
     sidebarWidth,
     wrapLine,
@@ -247,5 +250,29 @@ describe("sidebarWidth", () => {
             sidebarWidth(["a", "longest-label"], 200),
             sidebarWidth(["longest-label"], 200),
         );
+    });
+});
+
+describe("fitsTui", () => {
+    test("accepts a normal terminal", () => {
+        assert.equal(fitsTui(80, 24), true);
+        assert.equal(fitsTui(200, 60), true);
+    });
+
+    test("accepts exactly the minimum", () => {
+        assert.equal(fitsTui(MIN_COLUMNS, MIN_ROWS), true);
+    });
+
+    test("rejects a terminal short of either dimension", () => {
+        assert.equal(fitsTui(200, MIN_ROWS - 1), false);
+        assert.equal(fitsTui(MIN_COLUMNS - 1, 60), false);
+        assert.equal(fitsTui(0, 0), false);
+    });
+
+    // Callers pass 0 for a size the terminal never reported, which has to fall
+    // back rather than render into a window we know nothing about.
+    test("rejects an unknown size", () => {
+        assert.equal(fitsTui(0, 24), false);
+        assert.equal(fitsTui(120, 0), false);
     });
 });

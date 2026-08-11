@@ -10,7 +10,7 @@ const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 const program = new Command()
     .name("multiplex")
     .description("Run multiple commands in a tabbed TUI")
-    .version("0.4.0")
+    .version("0.4.1")
     .option("--cwd <path>", "Set the working directory", process.cwd())
     .option("-s, --stream", "Start in stream mode", false)
     .option(

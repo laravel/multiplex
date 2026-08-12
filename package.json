@@ -1,6 +1,6 @@
 {
     "name": "@laravel/multiplex",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "description": "A tabbed TUI for running multiple commands simultaneously with searchable, scrollable output",
     "keywords": [
         "tui",

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.4.2 - 2026-08-12
+
+### What's Changed
+
+* Stop a long command mangling the sidebar by [@joetannenbaum](https://github.com/joetannenbaum) in https://github.com/laravel/multiplex/pull/12
+
+**Full Changelog**: https://github.com/laravel/multiplex/compare/v0.4.1...v0.4.2
+
 ## v0.4.1 - 2026-08-11
 
 ### What's Changed

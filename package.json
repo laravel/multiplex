@@ -23,7 +23,7 @@
     "author": {
         "name": "Taylor Otwell"
     },
-    "packageManager": "pnpm@11.10.0",
+    "packageManager": "pnpm@11.21.0",
     "engines": {
         "node": ">=22.13.0"
     },

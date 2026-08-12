@@ -10,6 +10,7 @@ import {
     MIN_ROWS,
     sanitizeTitle,
     sidebarWidth,
+    singleLine,
     wrapLine,
 } from "./util.js";
 
@@ -250,6 +251,23 @@ describe("sidebarWidth", () => {
             sidebarWidth(["a", "longest-label"], 200),
             sidebarWidth(["longest-label"], 200),
         );
+    });
+});
+
+describe("singleLine", () => {
+    test("leaves a single-line command alone", () => {
+        assert.equal(singleLine("npm run dev"), "npm run dev");
+    });
+
+    test("folds a command written across lines onto one", () => {
+        assert.equal(
+            singleLine("rustfs server \\\n  --address=:9010 \\\n  --console"),
+            "rustfs server \\ --address=:9010 \\ --console",
+        );
+    });
+
+    test("drops leading and trailing whitespace", () => {
+        assert.equal(singleLine("\n  npm run dev\n"), "npm run dev");
     });
 });
 

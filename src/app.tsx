@@ -12,6 +12,7 @@ import {
     MIN_TABS_LAYOUT_WIDTH,
     minTabsLayoutHeight,
     sidebarWidth,
+    singleLine,
     tabbedTextWidth,
     wrapLine,
 } from "./util.js";
@@ -728,6 +729,11 @@ export function App({
             <Box flexDirection="row" flexGrow={1}>
                 <Box
                     flexDirection="column"
+                    // Ink shrinks a fixed-width box like any other flex item, so
+                    // a content pane asking for more room than it has takes a
+                    // column off the sidebar while the tab rows are still padded
+                    // to the full width, and every row wraps.
+                    flexShrink={0}
                     width={computedSidebarWidth}
                     borderStyle="round"
                     borderColor={
@@ -819,8 +825,10 @@ export function App({
                         borderStyle="single"
                         paddingX={1}
                     >
-                        <Text color="#888888">
-                            {commandDefs[selectedIndex].command}
+                        {/* One row, whatever the command: outputHeight is
+                            counted off a header of a known height. */}
+                        <Text color="#888888" wrap="truncate-end">
+                            {singleLine(commandDefs[selectedIndex].command)}
                         </Text>
                     </Box>
                     <Box paddingLeft={1} flexDirection="column" flexGrow={1}>

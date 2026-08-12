@@ -9,6 +9,13 @@ export const systemMsg = (text: string) => `\x1b[2m\x1b[3m${text}\x1b[0m`;
 export const sanitizeTitle = (title: string) =>
     title.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
 
+/**
+ * A command on a single row. Ink breaks on a newline whatever the wrap mode, so
+ * a command written across several lines would grow the tabbed header that shows
+ * it — and the output pane's height is counted off a header one row tall.
+ */
+export const singleLine = (text: string) => text.replace(/\s+/g, " ").trim();
+
 export const formatTimestamp = (time: Date) =>
     `\x1b[90m${time.toLocaleTimeString("en-GB")} \x1b[0m`;
 

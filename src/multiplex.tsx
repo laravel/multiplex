@@ -5,7 +5,7 @@ import { render } from "ink";
 import { App } from "./app.js";
 import { normalizeCommands } from "./args.js";
 import { runInline } from "./inline.js";
-import type { MultiplexOptions, OutputRef, ProcsRef } from "./types.js";
+import type { MultiplexOptions, OutputRef, SupervisorRef } from "./types.js";
 import {
     fitsTui,
     formatStreamContinuation,
@@ -48,11 +48,16 @@ function supportsColor(): boolean {
  * groups so they never see the terminal's own SIGHUP — without these, closing
  * the window leaves every dev server running and holding its port.
  */
-function installTeardown(shutdown: () => void, onExit: () => void) {
+function installTeardown(shutdown: () => Promise<void>, onExit: () => void) {
     const handlers = SIGNALS.map((signal) => {
+        // Waits for the shutdown so the children get their chance to clean up,
+        // which is only safe because a second signal re-enters here, finds the
+        // shutdown already running and exits through onExit — SIGKILL and no
+        // waiting. Someone who wants out now presses it again.
         const handler = () => {
-            shutdown();
-            process.exit(128 + constants.signals[signal]);
+            shutdown().finally(() => {
+                process.exit(128 + constants.signals[signal]);
+            });
         };
 
         process.on(signal, handler);
@@ -109,18 +114,16 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         throw new Error(`cwd path is not a directory: ${cwd}`);
     }
 
-    const procsRef: ProcsRef = { current: [] };
+    const supervisorRef: SupervisorRef = { current: null };
 
+    /** SIGTERM, a grace period, then SIGKILL for anything still standing. */
+    function terminate(): Promise<void> {
+        return supervisorRef.current?.terminate() ?? Promise.resolve();
+    }
+
+    /** The synchronous last resort, for the paths that cannot wait. */
     function killAll() {
-        for (const proc of procsRef.current) {
-            try {
-                if (proc?.pid) {
-                    process.kill(-proc.pid, "SIGKILL");
-                }
-            } catch {
-                //
-            }
-        }
+        supervisorRef.current?.killAll();
     }
 
     return inline ? runInlineMode() : runTui();
@@ -131,25 +134,34 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
 
         let shuttingDown = false;
 
-        function shutdown() {
+        function restoreTitle() {
+            if (!useTitle) {
+                return;
+            }
+
+            try {
+                process.stdout.write("\x1b[23;0t");
+            } catch {
+                //
+            }
+        }
+
+        async function shutdown() {
             if (shuttingDown) {
                 return;
             }
 
             shuttingDown = true;
 
-            killAll();
+            await terminate();
 
-            if (useTitle) {
-                try {
-                    process.stdout.write("\x1b[23;0t");
-                } catch {
-                    //
-                }
-            }
+            restoreTitle();
         }
 
-        const uninstall = installTeardown(shutdown, killAll);
+        const uninstall = installTeardown(shutdown, () => {
+            killAll();
+            restoreTitle();
+        });
 
         // Without a TTY inline mode is the expected outcome and needs no
         // explanation; in a real terminal the missing TUI does.
@@ -176,16 +188,16 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
                     process.stdout.columns ?? 80,
                     timestamps,
                 ),
-                procsRef,
+                supervisorRef,
             });
 
             const code = await done;
 
-            shutdown();
+            await shutdown();
 
             return code;
         } catch {
-            shutdown();
+            await shutdown();
 
             return 1;
         } finally {
@@ -246,9 +258,12 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         /**
          * Unmount first, so Ink's final frame and its raw-mode teardown happen
          * while we still own the alternate screen, then leave the screen before
-         * flushing so the logs land in the real scrollback.
+         * flushing so the logs land in the real scrollback. The wait for the
+         * children sits between the two: they can still be printing, and the
+         * flush should carry whatever they say on their way out, but nobody
+         * should have to watch a dead frame while they take it.
          */
-        function shutdown() {
+        async function shutdown() {
             if (shuttingDown) {
                 return;
             }
@@ -261,8 +276,11 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
                 //
             }
 
-            killAll();
             restoreTerminal();
+
+            await terminate();
+
+            killAll();
             flushOutput();
         }
 
@@ -291,18 +309,18 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
                     autoRestart={options.restart ?? true}
                     title={title}
                     outputRef={outputRef}
-                    procsRef={procsRef}
+                    supervisorRef={supervisorRef}
                 />,
                 { exitOnCtrlC: true },
             );
 
             await instance.waitUntilExit();
 
-            shutdown();
+            await shutdown();
 
             return 0;
         } catch {
-            shutdown();
+            await shutdown();
 
             return 1;
         } finally {

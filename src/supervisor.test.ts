@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import {
     createSupervisor,
     type FailureReason,
     type OutputStream,
+    type Supervisor,
 } from "./supervisor.js";
 import type { CommandDef } from "./types.js";
 
@@ -184,5 +189,175 @@ describe("createSupervisor", () => {
             result.lines.map((l) => l.text),
             ["startend", "next"],
         );
+    });
+});
+
+/** True while any member of the command's process group is still alive. */
+function groupAlive(supervisor: Supervisor, index: number): boolean {
+    const pid = supervisor.procs[index]?.pid;
+
+    if (!pid) {
+        return false;
+    }
+
+    try {
+        process.kill(-pid, 0);
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** Starts the commands and waits for each to print the line it starts with. */
+async function running(commandDefs: CommandDef[], events: string[] = []) {
+    const up = new Set<number>();
+
+    const supervisor = createSupervisor({
+        commandDefs,
+        cwd: process.cwd(),
+        columns: 80,
+        autoRestart: false,
+        forceColor: false,
+        handlers: {
+            onLine({ index, text }) {
+                if (text === "up") {
+                    up.add(index);
+                }
+            },
+            onExit({ index, code, signal }) {
+                events.push(
+                    `exit:${commandDefs[index].label}:${code}:${signal}`,
+                );
+            },
+            onFailed({ index, reason }) {
+                events.push(`failed:${commandDefs[index].label}:${reason}`);
+            },
+        },
+    });
+
+    supervisor.start();
+
+    const deadline = Date.now() + 10_000;
+
+    while (up.size < commandDefs.length && Date.now() < deadline) {
+        await delay(20);
+    }
+
+    assert.equal(up.size, commandDefs.length, "commands never started");
+
+    return supervisor;
+}
+
+describe("supervisor.terminate", () => {
+    // The bug this exists for: a dev server cleans up in a SIGTERM handler, and
+    // killing it outright leaves the file behind for the next build to trip on.
+    it("lets a command run its cleanup handler before it dies", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "multiplex-"));
+        const marker = join(dir, "hot");
+
+        try {
+            const supervisor = await running([
+                cmd(
+                    "a",
+                    `trap 'rm -f "${marker}"; exit 0' TERM; : > "${marker}"; echo up; while :; do sleep 0.05; done`,
+                ),
+            ]);
+
+            await supervisor.terminate();
+
+            assert.throws(
+                () => readFileSync(marker),
+                "cleanup handler never ran, the file is still there",
+            );
+            assert.equal(groupAlive(supervisor, 0), false);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    // The other half of the bargain: asking nicely cannot mean waiting forever.
+    it("kills a command that ignores SIGTERM once the grace period is up", async () => {
+        const supervisor = await running([
+            cmd("a", "trap '' TERM; echo up; while :; do sleep 0.05; done"),
+        ]);
+
+        const start = Date.now();
+
+        await supervisor.terminate(300);
+
+        const elapsed = Date.now() - start;
+
+        assert.ok(
+            elapsed >= 300,
+            `returned after ${elapsed}ms, before the grace period was up`,
+        );
+        assert.equal(groupAlive(supervisor, 0), false);
+    });
+
+    // The command exits on a signal we sent, which is not the command failing.
+    it("does not report the shutdown as a crash", async () => {
+        const events: string[] = [];
+        const supervisor = await running(
+            [cmd("a", "echo up; while :; do sleep 0.05; done")],
+            events,
+        );
+
+        await supervisor.terminate();
+
+        await delay(100);
+
+        assert.deepEqual(events, []);
+    });
+
+    // sh backgrounds the real work and exits, so the process we spawned is gone
+    // while the thing holding the port is not. Signalling the group catches it.
+    it("takes down a backgrounded grandchild the shell left behind", async () => {
+        const supervisor = await running([
+            cmd("a", "(while :; do sleep 0.05; done) & echo up; wait"),
+        ]);
+
+        await supervisor.terminate(300);
+
+        assert.equal(groupAlive(supervisor, 0), false);
+    });
+
+    // Both front ends call this, and the unmount path fires it without waiting.
+    it("is safe to call twice and settles both callers", async () => {
+        const supervisor = await running([
+            cmd("a", "echo up; while :; do sleep 0.05; done"),
+        ]);
+
+        await Promise.all([supervisor.terminate(), supervisor.terminate()]);
+
+        assert.equal(groupAlive(supervisor, 0), false);
+    });
+
+    it("stops a command that is waiting to be auto-restarted", async () => {
+        const events: string[] = [];
+        const supervisor = createSupervisor({
+            commandDefs: [cmd("a", "sleep 0.2; exit 1")],
+            cwd: process.cwd(),
+            columns: 80,
+            autoRestart: true,
+            minUptimeMs: 50,
+            restartDelayMs: 200,
+            forceColor: false,
+            handlers: {
+                onRestarted() {
+                    events.push("restarted");
+                },
+            },
+        });
+
+        supervisor.start();
+
+        await delay(300);
+
+        await supervisor.terminate();
+
+        await delay(400);
+
+        assert.deepEqual(events, [], "a restart fired after the shutdown");
     });
 });

@@ -1,4 +1,4 @@
-import type { ChildProcess } from "node:child_process";
+import type { Supervisor } from "./supervisor.js";
 
 export type CommandDef = {
     label: string;
@@ -42,6 +42,10 @@ export type OutputRef = {
     current: StreamLine[];
 };
 
-export type ProcsRef = {
-    current: ChildProcess[];
+/**
+ * How the front ends hand `multiplex()` the supervisor they built, so its
+ * shutdown can reach the children without owning the process layer itself.
+ */
+export type SupervisorRef = {
+    current: Supervisor | null;
 };

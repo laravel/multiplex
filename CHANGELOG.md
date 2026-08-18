@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.4.3 - 2026-08-18
+
+### What's Changed
+
+* Give commands a chance to clean up before killing them by [@joetannenbaum](https://github.com/joetannenbaum) in https://github.com/laravel/multiplex/pull/14
+* Fix graceful shutdown test helper by [@joetannenbaum](https://github.com/joetannenbaum) in https://github.com/laravel/multiplex/pull/15
+* Bump the npm group with 3 updates by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/multiplex/pull/16
+
+**Full Changelog**: https://github.com/laravel/multiplex/compare/v0.4.2...v0.4.3
+
 ## v0.4.2 - 2026-08-12
 
 ### What's Changed

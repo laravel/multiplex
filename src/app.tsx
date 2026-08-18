@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { contrastText } from "./color.js";
 import { highlightLine, indexMatches } from "./search.js";
-import type { CommandDef, OutputRef, ProcsRef } from "./types.js";
+import type { CommandDef, OutputRef, SupervisorRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
 import { useScroll } from "./use-scroll.js";
 import {
@@ -30,7 +30,7 @@ type AppProps = {
     autoRestart?: boolean;
     title?: string;
     outputRef?: OutputRef;
-    procsRef?: ProcsRef;
+    supervisorRef?: SupervisorRef;
 };
 
 const KeyBindings = ({ bindings }: { bindings: [string, string][] }) => {
@@ -59,7 +59,7 @@ export function App({
     autoRestart = true,
     title,
     outputRef,
-    procsRef: externalProcsRef,
+    supervisorRef: externalSupervisorRef,
 }: AppProps) {
     const { stdout } = useStdout();
     const { exit } = useApp();
@@ -133,7 +133,7 @@ export function App({
         columns: cols,
         triggerRender,
         outputRef,
-        externalProcsRef,
+        externalSupervisorRef,
     });
 
     const [animFrame, setAnimFrame] = useState(0);

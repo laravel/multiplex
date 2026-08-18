@@ -1,7 +1,12 @@
 import { execSync, spawn } from "node:child_process";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSupervisor, type Supervisor } from "./supervisor.js";
-import type { CommandDef, OutputRef, ProcsRef, StreamLine } from "./types.js";
+import type {
+    CommandDef,
+    OutputRef,
+    StreamLine,
+    SupervisorRef,
+} from "./types.js";
 import {
     childColumns,
     formatTimestamp,
@@ -60,7 +65,7 @@ type UseProcessesOptions = {
     columns: number;
     triggerRender: () => void;
     outputRef?: OutputRef;
-    externalProcsRef?: ProcsRef;
+    externalSupervisorRef?: SupervisorRef;
 };
 
 export function useProcesses({
@@ -74,7 +79,7 @@ export function useProcesses({
     columns,
     triggerRender,
     outputRef,
-    externalProcsRef,
+    externalSupervisorRef,
 }: UseProcessesOptions) {
     // Complete rows, already wrapped to the pane, plus the tail of output that
     // has not seen its newline yet. The tail stays raw because more of it is
@@ -316,8 +321,8 @@ export function useProcesses({
 
         supervisor.start();
 
-        if (externalProcsRef) {
-            externalProcsRef.current = supervisor.procs;
+        if (externalSupervisorRef) {
+            externalSupervisorRef.current = supervisor;
         }
 
         return () => supervisor.stop();

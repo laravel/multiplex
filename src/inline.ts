@@ -1,6 +1,6 @@
 import { stripAnsi } from "./search.js";
 import { createSupervisor, type Supervisor } from "./supervisor.js";
-import type { CommandDef, ProcsRef } from "./types.js";
+import type { CommandDef, SupervisorRef } from "./types.js";
 import { formatStreamLabel, formatTimestamp } from "./util.js";
 
 const JSON_SCHEMA_VERSION = 1;
@@ -13,7 +13,7 @@ export type InlineOptions = {
     json: boolean;
     color: boolean;
     columns: number;
-    procsRef?: ProcsRef;
+    supervisorRef?: SupervisorRef;
 };
 
 export type InlineRun = {
@@ -43,7 +43,7 @@ export function runInline({
     json,
     color,
     columns,
-    procsRef,
+    supervisorRef,
 }: InlineOptions): InlineRun {
     const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
 
@@ -239,8 +239,8 @@ export function runInline({
 
     supervisor.start();
 
-    if (procsRef) {
-        procsRef.current = supervisor.procs;
+    if (supervisorRef) {
+        supervisorRef.current = supervisor;
     }
 
     return { supervisor, done };

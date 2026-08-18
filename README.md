@@ -153,6 +153,8 @@ Every `command` is run through `sh -c`, so it is a shell string, not an argv arr
 
 `multiplex()` takes over the terminal for the duration of the call: it enters the alternate screen, installs its own `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT` handlers, and renders the TUI. It resolves with the same exit code the CLI would have used — `0` normally, `1` if rendering failed. By then the terminal is restored, every child process is dead, the buffered output has been flushed to scrollback, and the signal handlers it installed have been removed, so the calling process is free to carry on.
 
+Shutting down sends each command's process group a `SIGTERM` and waits for it, so anything that tidies up on the way out — a dev server unlinking the hot file it wrote, a watcher releasing a lock — gets to. Whatever is still running two seconds later is killed outright, and pressing `Ctrl-C` a second time skips the wait entirely.
+
 If stdin or stdout isn't a TTY, or the terminal is smaller than 26 columns by 8 rows, it runs [inline](#inline-mode) instead, resolving with the first failing command's exit code. Set `inline: true` to ask for that in a real terminal.
 
 Options are validated before anything is written to the terminal, so an invalid option throws with the screen untouched.
@@ -234,3 +236,4 @@ Use `--no-restart` to turn it off entirely, for one-shot commands like builds or
 - **Buffer limits** to keep memory usage low during long sessions
 - **Output flush** on exit so logs are preserved in terminal scrollback
 - **Process group cleanup** on quit and on `SIGINT`/`SIGTERM`/`SIGHUP`/`SIGQUIT`, so closing the terminal window doesn't leave dev servers running and holding their ports
+- **Graceful shutdown** - commands get a `SIGTERM` and up to two seconds to clean up after themselves before they are killed, so a dev server removes the files it wrote

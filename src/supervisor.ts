@@ -23,6 +23,38 @@ export const MIN_UPTIME_FOR_RESTART_MS = 1000;
  */
 export const EXIT_DRAIN_GRACE_MS = 500;
 
+/**
+ * How long a command gets to act on SIGTERM before it is killed outright.
+ * Anything with cleanup to do — a dev server unlinking its hot file, a watcher
+ * releasing a lock — does it in a handler that SIGKILL never reaches, so
+ * shutting down without this leaves the working tree in a state the next
+ * command has to be told to ignore. The wait ends the moment the last child is
+ * gone, so this ceiling is only ever paid by something that ignores SIGTERM.
+ */
+export const TERMINATE_GRACE_MS = 2000;
+
+/**
+ * How long to wait for the SIGKILL that follows the grace period to land, so we
+ * do not report a shutdown as finished with children still on their way out.
+ */
+export const FORCE_KILL_GRACE_MS = 250;
+
+/**
+ * Resolves when every promise has, or when the time is up — whichever comes
+ * first. The timer is cleared on the fast path so a finished shutdown does not
+ * hold the event loop open for the rest of the grace period.
+ */
+function settle(promises: Promise<void>[], ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        const timer = setTimeout(resolve, ms);
+
+        Promise.all(promises).then(() => {
+            clearTimeout(timer);
+            resolve();
+        });
+    });
+}
+
 /** Why a command is not going to be restarted. */
 export type FailureReason =
     | "spawn-error"
@@ -105,6 +137,13 @@ export type Supervisor = {
     start(): void;
     restart(index: number, manual?: boolean): void;
     killAll(): void;
+    /**
+     * Asks every command to stop, then kills whatever is left. Safe to call
+     * more than once and from more than one place: the first call starts the
+     * shutdown and every later one waits on that same shutdown rather than
+     * starting a second.
+     */
+    terminate(graceMs?: number): Promise<void>;
     stop(): void;
 };
 
@@ -133,6 +172,7 @@ export function createSupervisor({
     const intentionalKills = new Map<number, number>();
 
     let stopped = false;
+    let terminating: Promise<void> | null = null;
 
     const supervisor: Supervisor = {
         handlers,
@@ -141,6 +181,7 @@ export function createSupervisor({
         start,
         restart,
         killAll,
+        terminate,
         stop,
     };
 
@@ -422,28 +463,90 @@ export function createSupervisor({
         procs[index] = spawnProcess(commandDefs[index], index);
     }
 
-    function killAll() {
-        for (const proc of procs) {
+    /**
+     * Signals the whole process group rather than the child we spawned, because
+     * the child is `sh` and the thing holding the port is its descendant. The
+     * group outlives its leader while any member is still in it, so this is not
+     * guarded on the leader being alive: a command that backgrounded something
+     * has an exited `sh` and a group that still needs the signal.
+     */
+    function signalAll(signal: NodeJS.Signals, claimExits: boolean) {
+        procs.forEach((proc, index) => {
+            if (!proc?.pid) {
+                return;
+            }
+
+            const live = proc.exitCode === null && proc.signalCode === null;
+
             try {
-                if (proc?.pid) {
-                    process.kill(-proc.pid, "SIGKILL");
+                process.kill(-proc.pid, signal);
+
+                if (claimExits && live) {
+                    intentionalKills.set(
+                        index,
+                        (intentionalKills.get(index) ?? 0) + 1,
+                    );
                 }
             } catch {
                 //
             }
-        }
+        });
     }
 
-    function stop() {
-        stopped = true;
+    function killAll() {
+        signalAll("SIGKILL", false);
+    }
 
+    function clearRestartTimers() {
         for (const timer of restartTimers.values()) {
             clearTimeout(timer);
         }
 
         restartTimers.clear();
         pendingRestarts.clear();
+    }
+
+    async function runTerminate(graceMs: number): Promise<void> {
+        // Synchronous down to the first await, so a caller that cannot wait
+        // still gets the timers stopped and the signals sent before it returns.
+        stopped = true;
+
+        clearRestartTimers();
+
+        const exits = procs
+            .filter(
+                (proc) =>
+                    proc?.pid &&
+                    proc.exitCode === null &&
+                    proc.signalCode === null,
+            )
+            .map(
+                (proc) =>
+                    new Promise<void>((resolve) => {
+                        proc.once("exit", () => resolve());
+                    }),
+            );
+
+        signalAll("SIGTERM", true);
+
+        await settle(exits, graceMs);
+
         killAll();
+
+        await settle(exits, FORCE_KILL_GRACE_MS);
+    }
+
+    function terminate(graceMs = TERMINATE_GRACE_MS): Promise<void> {
+        terminating ??= runTerminate(graceMs);
+
+        return terminating;
+    }
+
+    function stop() {
+        // The unmount path has nothing to await on, so it starts the shutdown
+        // and leaves it running; whoever owns the process awaits the same
+        // promise through terminate().
+        terminate().catch(() => {});
     }
 
     return supervisor;

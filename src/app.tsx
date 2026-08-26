@@ -39,10 +39,10 @@ const KeyBindings = ({ bindings }: { bindings: [string, string][] }) => {
             {bindings.map(([k, desc], i) => (
                 <Text key={i}>
                     {i > 0 && <Text color="#555555">{" ".repeat(3)}</Text>}
-                    <Text color="#888888" bold>
+                    <Text color="#d4d4d8" bold>
                         {k}
                     </Text>
-                    <Text color="#555555"> {desc}</Text>
+                    <Text color="#a1a1aa"> {desc}</Text>
                 </Text>
             ))}
         </Text>

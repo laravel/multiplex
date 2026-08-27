@@ -199,16 +199,16 @@ Use `--no-restart` to turn it off entirely, for one-shot commands like builds or
 
 ### Actions
 
-| Key | Action |
-| --- | --- |
-| `s` | Switch to stream mode |
-| `t` | Switch to tabbed mode |
-| `r` | Restart the selected process (also revives one killed with `x`) |
-| `x` | Kill the selected process and leave it stopped until restarted with `r` |
-| `c` | Clear output (current tab or stream) |
+| Key | Action                                     |
+| --- |--------------------------------------------|
+| `s` | Switch to stream mode                      |
+| `t` | Switch to tabbed mode                      |
+| `r` | Restart the selected process               |
+| `x` | Kill the selected process                  |
+| `c` | Clear output (current tab or stream)       |
 | `f` | Filter which commands appear in the stream |
-| `/` | Open search |
-| `q` | Quit |
+| `/` | Open search                                |
+| `q` | Quit                                       |
 
 `s`, `r`, `x`, `Tab` and `Left`/`Right` apply to tabbed mode; `t` and `f` apply to stream mode. Pressing the key for the mode you are already in does nothing. In filter mode, `1`-`9` toggle each command on and off and `f` or `Esc` closes it — you can always leave at least one command visible.
 

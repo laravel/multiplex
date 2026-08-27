@@ -795,6 +795,11 @@ export function App({
                             innerWidth - 3 - cmd.label.length,
                         );
                         const bg = selected ? cmd.color : undefined;
+
+                        let labelColor = failed ? "#ef4444" : cmd.color;
+                        labelColor = stopped ? "#71717a" : labelColor;
+                        labelColor = selected ? onFill : labelColor;
+
                         return (
                             <Box key={i}>
                                 <Text
@@ -807,15 +812,7 @@ export function App({
                                 </Text>
                                 <Text
                                     backgroundColor={bg}
-                                    color={
-                                        selected
-                                            ? onFill
-                                            : stopped
-                                              ? "#71717a"
-                                              : failed
-                                                ? "#ef4444"
-                                                : cmd.color
-                                    }
+                                    color={labelColor}
                                     dimColor={stopped && !selected}
                                 >
                                     {cmd.label}

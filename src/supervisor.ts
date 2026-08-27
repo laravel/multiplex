@@ -138,11 +138,6 @@ export type Supervisor = {
     readonly exitCodes: (number | null)[];
     start(): void;
     restart(index: number, manual?: boolean): void;
-    /**
-     * Stops a single command and leaves it stopped: no auto-restart, no
-     * replacement. `restart` brings it back. Used by the TUI's kill shortcut to
-     * silence a noisy command without tearing down the whole run.
-     */
     kill(index: number): void;
     killAll(): void;
     /**

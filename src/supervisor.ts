@@ -110,6 +110,8 @@ export type SupervisorHandlers = {
         reason: FailureReason;
         time: Date;
     }): void;
+    /** A command was stopped by the user and will not be restarted until asked. */
+    onKilled?(e: { index: number; time: Date }): void;
     /** Every command has stopped and none is waiting to be restarted. */
     onSettled?(e: { time: Date }): void;
 };
@@ -136,6 +138,12 @@ export type Supervisor = {
     readonly exitCodes: (number | null)[];
     start(): void;
     restart(index: number, manual?: boolean): void;
+    /**
+     * Stops a single command and leaves it stopped: no auto-restart, no
+     * replacement. `restart` brings it back. Used by the TUI's kill shortcut to
+     * silence a noisy command without tearing down the whole run.
+     */
+    kill(index: number): void;
     killAll(): void;
     /**
      * Asks every command to stop, then kills whatever is left. Safe to call
@@ -170,6 +178,11 @@ export function createSupervisor({
     // plain flag was wrong in both directions: set with no exit coming, it
     // swallowed the next real crash, and it could not hold two rapid restarts.
     const intentionalKills = new Map<number, number>();
+    // Indices the user stopped with kill(). A manual restart revives one and
+    // must not re-signal it: kill already sent the signal and claimed the exit,
+    // so doing it again would leave a claim with no exit to consume and swallow
+    // the revived process's next real crash.
+    const manuallyStopped = new Set<number>();
 
     let stopped = false;
     let terminating: Promise<void> | null = null;
@@ -180,6 +193,7 @@ export function createSupervisor({
         exitCodes,
         start,
         restart,
+        kill,
         killAll,
         terminate,
         stop,
@@ -427,17 +441,21 @@ export function createSupervisor({
             pendingRestarts.delete(index);
         }
 
+        // Reviving a killed tab: kill already signalled it and claimed the exit.
+        const wasStopped = manuallyStopped.delete(index);
+
         if (manual) {
             autoRestartCounts[index] = 0;
 
             const proc = procs[index];
 
             // Only claim an exit when the kill is what causes it. Restarting a
-            // process that already died — the whole point of `r` on a failed
-            // tab — sends no signal and produces no exit event, so claiming one
-            // here would swallow the replacement's crash and leave a dead
-            // process looking healthy.
+            // process that already died — the whole point of `r` on a failed or
+            // killed tab — sends no signal and produces no exit event, so
+            // claiming one here would swallow the replacement's crash and leave
+            // a dead process looking healthy.
             if (
+                !wasStopped &&
                 proc?.pid &&
                 proc.exitCode === null &&
                 proc.signalCode === null
@@ -461,6 +479,50 @@ export function createSupervisor({
         supervisor.handlers.onRestarted?.({ index, manual, time: new Date() });
 
         procs[index] = spawnProcess(commandDefs[index], index);
+    }
+
+    function kill(index: number) {
+        if (stopped) {
+            return;
+        }
+
+        const timer = restartTimers.get(index);
+
+        if (timer) {
+            clearTimeout(timer);
+            restartTimers.delete(index);
+            pendingRestarts.delete(index);
+        }
+
+        autoRestartCounts[index] = 0;
+        manuallyStopped.add(index);
+
+        const proc = procs[index];
+
+        // Claim the exit only when the signal is what ends the process, exactly
+        // as restart does: a command that already died has nothing to kill, and
+        // claiming an exit that never comes would swallow the next real one.
+        if (proc?.pid && proc.exitCode === null && proc.signalCode === null) {
+            try {
+                process.kill(-proc.pid, "SIGKILL");
+
+                intentionalKills.set(
+                    index,
+                    (intentionalKills.get(index) ?? 0) + 1,
+                );
+            } catch {
+                //
+            }
+        }
+
+        running[index] = false;
+        partials[index] = "";
+
+        const time = new Date();
+
+        supervisor.handlers.onKilled?.({ index, time });
+
+        checkSettled(time);
     }
 
     /**

@@ -263,6 +263,12 @@ async function running(commandDefs: CommandDef[], events: string[] = []) {
             onFailed({ index, reason }) {
                 events.push(`failed:${commandDefs[index].label}:${reason}`);
             },
+            onKilled({ index }) {
+                events.push(`killed:${commandDefs[index].label}`);
+            },
+            onRestarted({ index }) {
+                events.push(`restarted:${commandDefs[index].label}`);
+            },
         },
     });
 
@@ -401,5 +407,95 @@ describe("supervisor.terminate", () => {
         await delay(400);
 
         assert.deepEqual(events, [], "a restart fired after the shutdown");
+    });
+});
+
+describe("supervisor.kill", () => {
+    // The point of the kill shortcut: take a tab down and leave it down, so a
+    // noisy command can be silenced on purpose without ending the whole run.
+    it("stops a command and does not restart it", async () => {
+        const events: string[] = [];
+        const supervisor = await running(
+            [cmd("a", "echo up; while :; do sleep 0.05; done")],
+            events,
+        );
+
+        supervisor.kill(0);
+
+        assert.ok(
+            await groupGone(supervisor, 0),
+            "the killed process group is still alive",
+        );
+
+        await delay(200);
+
+        // A deliberate kill is not a crash: no exit, no failure, no restart.
+        assert.deepEqual(events, ["killed:a"]);
+
+        await supervisor.terminate();
+    });
+
+    // "briefly" is the whole idea — restart has to bring a killed command back.
+    it("brings a killed command back when it is restarted", async () => {
+        const events: string[] = [];
+        const supervisor = await running(
+            [cmd("a", "echo up; while :; do sleep 0.05; done")],
+            events,
+        );
+
+        supervisor.kill(0);
+
+        assert.ok(await groupGone(supervisor, 0));
+
+        supervisor.restart(0);
+
+        const deadline = Date.now() + 5000;
+
+        while (!groupAlive(supervisor, 0) && Date.now() < deadline) {
+            await delay(20);
+        }
+
+        assert.ok(
+            groupAlive(supervisor, 0),
+            "restart did not revive the killed command",
+        );
+        assert.ok(
+            events.includes("restarted:a"),
+            "the revive did not emit a restart",
+        );
+
+        await supervisor.terminate();
+    });
+
+    // A command killed while an auto-restart was already scheduled must not
+    // come back to life on that timer.
+    it("cancels a pending auto-restart", async () => {
+        const events: string[] = [];
+        const supervisor = createSupervisor({
+            commandDefs: [cmd("a", "sleep 0.2; exit 1")],
+            cwd: process.cwd(),
+            columns: 80,
+            autoRestart: true,
+            minUptimeMs: 50,
+            restartDelayMs: 200,
+            forceColor: false,
+            handlers: {
+                onRestarted() {
+                    events.push("restarted");
+                },
+            },
+        });
+
+        supervisor.start();
+
+        await delay(300);
+
+        supervisor.kill(0);
+
+        await delay(400);
+
+        assert.deepEqual(events, [], "an auto-restart fired after the kill");
+
+        await supervisor.terminate();
     });
 });

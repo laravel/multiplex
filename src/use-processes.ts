@@ -91,6 +91,7 @@ export function useProcesses({
     const pendingRestartsRef = useRef<Set<number>>(new Set());
     const supervisorRef = useRef<Supervisor | null>(null);
     const [failedProcs, setFailedProcs] = useState<Set<number>>(new Set());
+    const [killedProcs, setKilledProcs] = useState<Set<number>>(new Set());
 
     if (outputRef) {
         outputRef.current = streamLinesRef.current;
@@ -289,6 +290,24 @@ export function useProcesses({
                         return next;
                     });
 
+                    setKilledProcs((prev) => {
+                        if (!prev.has(index)) {
+                            return prev;
+                        }
+
+                        const next = new Set(prev);
+
+                        next.delete(index);
+
+                        return next;
+                    });
+
+                    triggerRender();
+                },
+
+                onKilled({ index, time }) {
+                    pushSystem(index, "Killed", time);
+                    setKilledProcs((prev) => new Set(prev).add(index));
                     triggerRender();
                 },
 
@@ -310,6 +329,10 @@ export function useProcesses({
 
     const restartProcess = useCallback((index: number) => {
         supervisorRef.current?.restart(index, true);
+    }, []);
+
+    const killProcess = useCallback((index: number) => {
+        supervisorRef.current?.kill(index);
     }, []);
 
     useEffect(() => {
@@ -355,7 +378,9 @@ export function useProcesses({
         outputPendingRef,
         streamLinesRef,
         failedProcs,
+        killedProcs,
         restartProcess,
+        killProcess,
         clearOutput,
         clearStream,
         spawnTimeRef,

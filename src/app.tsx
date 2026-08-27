@@ -117,7 +117,9 @@ export function App({
         outputPendingRef,
         streamLinesRef,
         failedProcs,
+        killedProcs,
         restartProcess,
+        killProcess,
         clearOutput,
         clearStream,
         spawnTimeRef,
@@ -272,6 +274,7 @@ export function App({
                     ["↑/↓", "navigate"],
                     ["tab", "logs"],
                     ["r", "restart"],
+                    ["x", "kill"],
                     ["c", "clear"],
                     ["/", "search"],
                     ["s", "stream"],
@@ -469,6 +472,13 @@ export function App({
         if (!streamMode) {
             if (input === "r") {
                 restartProcess(selectedIndex);
+                resetScroll();
+
+                return;
+            }
+
+            if (input === "x") {
+                killProcess(selectedIndex);
                 resetScroll();
 
                 return;
@@ -743,6 +753,7 @@ export function App({
                     {commandDefs.map((cmd, i) => {
                         const selected = i === selectedIndex;
                         const failed = failedProcs.has(i);
+                        const stopped = killedProcs.has(i);
                         const isRestarting = pendingRestartsRef.current.has(i);
                         const isSpinning =
                             renderNow - spawnTimeRef.current[i] <
@@ -760,7 +771,11 @@ export function App({
                         let indicatorColor: string;
                         let dim = false;
 
-                        if (isRestarting) {
+                        if (stopped) {
+                            indicator = "■";
+                            indicatorColor = selected ? onFill : "#71717a";
+                            dim = !selected;
+                        } else if (isRestarting) {
                             indicator = spinnerChar;
                             indicatorColor = selected ? onFill : "#e5c07b";
                         } else if (failed) {
@@ -795,10 +810,13 @@ export function App({
                                     color={
                                         selected
                                             ? onFill
-                                            : failed
-                                              ? "#ef4444"
-                                              : cmd.color
+                                            : stopped
+                                              ? "#71717a"
+                                              : failed
+                                                ? "#ef4444"
+                                                : cmd.color
                                     }
+                                    dimColor={stopped && !selected}
                                 >
                                     {cmd.label}
                                     {" ".repeat(pad)}

@@ -489,14 +489,22 @@ export function createSupervisor({
         }
 
         autoRestartCounts[index] = 0;
+
+        const alreadyStopped = manuallyStopped.has(index);
+
         manuallyStopped.add(index);
 
         const proc = procs[index];
 
-        // Claim the exit only when the signal is what ends the process, exactly
-        // as restart does: a command that already died has nothing to kill, and
-        // claiming an exit that never comes would swallow the next real one.
-        if (proc?.pid && proc.exitCode === null && proc.signalCode === null) {
+        // Claim the exit only when this signal is what ends the process, and
+        // only once: a command already dead or already killed has nothing to
+        // kill, and a claim with no exit swallows the next real one.
+        if (
+            !alreadyStopped &&
+            proc?.pid &&
+            proc.exitCode === null &&
+            proc.signalCode === null
+        ) {
             try {
                 process.kill(-proc.pid, "SIGKILL");
 

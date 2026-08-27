@@ -110,7 +110,6 @@ export type SupervisorHandlers = {
         reason: FailureReason;
         time: Date;
     }): void;
-    /** A command was stopped by the user and will not be restarted until asked. */
     onKilled?(e: { index: number; time: Date }): void;
     /** Every command has stopped and none is waiting to be restarted. */
     onSettled?(e: { time: Date }): void;

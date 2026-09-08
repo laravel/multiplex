@@ -5,6 +5,12 @@ import { render } from "ink";
 import { App } from "./app.js";
 import { normalizeCommands } from "./args.js";
 import { runInline } from "./inline.js";
+import {
+    attachMouseListener,
+    disableMouseReporting,
+    enableMouseReporting,
+    type MouseEvent,
+} from "./mouse.js";
 import type { MultiplexOptions, OutputRef, SupervisorRef } from "./types.js";
 import {
     fitsTui,
@@ -214,6 +220,11 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
 
         function restoreTerminal() {
             try {
+                // First: the shell must never inherit mouse reporting, on any
+                // exit path. This runs inside shutdown() and also as the sync
+                // process.on("exit") fallback, which is what makes a crash or
+                // a second signal safe.
+                disableMouseReporting();
                 process.stdout.write("\x1b[?25h\x1b[?1049l");
 
                 // Guarded: restoreTerminal runs twice, and a second pop would take someone else's title off the stack.
@@ -256,6 +267,27 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         }
 
         /**
+         * Foundation only: decoded mouse events go to stderr behind
+         * MULTIPLEX_MOUSE_DEBUG and are otherwise discarded. No UI behaviour
+         * is wired to them yet.
+         */
+        function logMouseEvent(event: MouseEvent) {
+            if (!process.env.MULTIPLEX_MOUSE_DEBUG) {
+                return;
+            }
+
+            try {
+                process.stderr.write(
+                    `[mouse] ${event.type} x=${event.x} y=${event.y} button=${event.button}${event.release ? " release" : ""}\n`,
+                );
+            } catch {
+                //
+            }
+        }
+
+        let detachMouse: (() => void) | undefined;
+
+        /**
          * Unmount first, so Ink's final frame and its raw-mode teardown happen
          * while we still own the alternate screen, then leave the screen before
          * flushing so the logs land in the real scrollback. The wait for the
@@ -269,6 +301,7 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
             }
 
             shuttingDown = true;
+            detachMouse?.();
 
             try {
                 instance?.unmount();
@@ -296,6 +329,10 @@ export async function multiplex(options: MultiplexOptions): Promise<number> {
         }
 
         process.stdout.write("\x1b[?1049h\x1b[?25l");
+        // TUI only: runInlineMode never touches these, so inline/--json output
+        // stays byte-for-byte what it was.
+        enableMouseReporting();
+        detachMouse = attachMouseListener(logMouseEvent);
 
         try {
             instance = render(

@@ -5,9 +5,8 @@ import { contrastText } from "./color.js";
 import {
     attachMouseListener,
     type MouseEvent,
-    mouseInContentViewport,
-    sidebarRowAt,
-    WHEEL_SCROLL_LINES,
+    planClickResponse,
+    planWheelResponse,
 } from "./mouse.js";
 import { highlightLine, indexMatches } from "./search.js";
 import type { CommandDef, OutputRef, SupervisorRef } from "./types.js";
@@ -568,12 +567,11 @@ export function App({
         timestamps,
     );
 
-    // The wheel scrolls whatever output pane the cursor is over, through the
-    // same scrollUp/scrollDown Up/Down call — clamping and the new-output
-    // indicator behave identically by construction. It never touches the
-    // selected tab or keyboard focus; over the sidebar it is a no-op.
-    // Re-subscribing on rows/cols/mode keeps the hit test on the current
-    // layout rather than a pre-resize one.
+    // The wheel scrolls whatever output pane the cursor is over and a click
+    // selects tabs and moves focus; both are decided by pure planners and
+    // applied here through the same setState calls the equivalent keypresses
+    // use. Re-subscribing on rows/cols/mode keeps the hit test on the
+    // current layout rather than a pre-resize one.
     useEffect(() => {
         const onMouse = (event: MouseEvent) => {
             if (process.env.MULTIPLEX_MOUSE_DEBUG) {
@@ -586,80 +584,49 @@ export function App({
                 }
             }
 
-            if (event.type === "left-click") {
-                // No sidebar and no focus state in stream mode; and like the
-                // wheel, clicks stay dead while a mode owns the keyboard, so
-                // a stray click cannot fight search or filter input.
-                if (streamMode || searchInputMode || filterMode) {
-                    return;
-                }
+            const click = planClickResponse(event, {
+                streamMode,
+                searchInputMode,
+                filterMode,
+                rows,
+                cols,
+                sidebarWidth: computedSidebarWidth,
+                commandCount: commandDefs.length,
+            });
 
-                const row = sidebarRowAt(event.x, event.y, {
-                    rows,
-                    sidebarWidth: computedSidebarWidth,
-                    commandCount: commandDefs.length,
-                });
-
-                if (row !== null) {
-                    // Exactly what pressing the tab's number key does, plus
-                    // the focus Tab would have given it.
-                    setSelectedIndex(row);
-                    setCurrentMatch(0);
-                    scrollToBottom();
-                    setFocus("sidebar");
-
-                    return;
-                }
-
-                // Click where you want focus to be — the equivalent of Tab or
-                // the right arrow. Anything else is border or empty space and
-                // stays a no-op.
-                if (
-                    mouseInContentViewport(event.x, event.y, {
-                        mode: "tabbed",
-                        rows,
-                        cols,
-                        sidebarWidth: computedSidebarWidth,
-                    })
-                ) {
-                    setFocus("content");
-                }
+            if (click.kind === "select-tab") {
+                // Exactly what pressing the tab's number key does, plus the
+                // focus Tab would have given it.
+                setSelectedIndex(click.index);
+                setCurrentMatch(0);
+                scrollToBottom();
+                setFocus("sidebar");
 
                 return;
             }
 
-            if (event.type !== "wheel-up" && event.type !== "wheel-down") {
+            if (click.kind === "focus-content") {
+                setFocus("content");
+
                 return;
             }
 
-            // Keyboard scrolling is also dead while typing a search or
-            // filtering, so the wheel stays dead there too.
-            if (searchInputMode || filterMode) {
-                return;
-            }
+            const wheel = planWheelResponse(event, {
+                streamMode,
+                searchInputMode,
+                filterMode,
+                rows,
+                cols,
+                sidebarWidth: computedSidebarWidth,
+            });
 
-            const inContent = mouseInContentViewport(
-                event.x,
-                event.y,
-                streamMode
-                    ? { mode: "stream", rows, cols }
-                    : {
-                          mode: "tabbed",
-                          rows,
-                          cols,
-                          sidebarWidth: computedSidebarWidth,
-                      },
-            );
-
-            if (!inContent) {
-                return;
-            }
-
-            for (let i = 0; i < WHEEL_SCROLL_LINES; i++) {
-                if (event.type === "wheel-up") {
-                    scrollUp();
-                } else {
-                    scrollDown();
+            if (wheel.kind === "scroll") {
+                for (let i = 0; i < wheel.lines; i++) {
+                    if (wheel.direction === "up") {
+                        scrollUp();
+                    } else {
+                        scrollDown();
+                    }
                 }
             }
         };

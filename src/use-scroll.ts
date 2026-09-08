@@ -1,5 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/**
+ * Pure scroll transitions, factored out so the clamping is unit-testable
+ * without rendering anything. `null` means pinned to the live tail.
+ */
+export function nextScrollDown(
+    prev: number | null,
+    totalLines: number,
+    outputHeight: number,
+): number | null {
+    if (prev === null) {
+        return null;
+    }
+
+    const maxOffset = Math.max(0, totalLines - outputHeight);
+    const newOffset = prev + 1;
+
+    return newOffset >= maxOffset ? null : newOffset;
+}
+
+export function nextScrollUp(
+    prev: number | null,
+    totalLines: number,
+    outputHeight: number,
+): number {
+    const currentStart = prev ?? Math.max(0, totalLines - outputHeight);
+
+    return Math.max(0, currentStart - 1);
+}
+
+export function nextPageDown(
+    prev: number | null,
+    totalLines: number,
+    outputHeight: number,
+): number | null {
+    if (prev === null) {
+        return null;
+    }
+
+    const maxOffset = Math.max(0, totalLines - outputHeight);
+    const newOffset = prev + outputHeight;
+
+    return newOffset >= maxOffset ? null : newOffset;
+}
+
+export function nextPageUp(
+    prev: number | null,
+    totalLines: number,
+    outputHeight: number,
+): number {
+    const currentStart = prev ?? Math.max(0, totalLines - outputHeight);
+
+    return Math.max(0, currentStart - outputHeight);
+}
+
 export function useScroll(outputHeight: number) {
     const [scrollOffset, setScrollOffset] = useState<number | null>(null);
     const [hasNewOutput, setHasNewOutput] = useState(false);
@@ -21,46 +75,27 @@ export function useScroll(outputHeight: number) {
     }, []);
 
     const scrollDown = useCallback(() => {
-        setScrollOffset((prev) => {
-            if (prev === null) {
-                return null;
-            }
-
-            const maxOffset = Math.max(0, totalLinesRef.current - outputHeight);
-            const newOffset = prev + 1;
-
-            return newOffset >= maxOffset ? null : newOffset;
-        });
+        setScrollOffset((prev) =>
+            nextScrollDown(prev, totalLinesRef.current, outputHeight),
+        );
     }, [outputHeight]);
 
     const scrollUp = useCallback(() => {
-        setScrollOffset((prev) => {
-            const currentStart =
-                prev ?? Math.max(0, totalLinesRef.current - outputHeight);
-
-            return Math.max(0, currentStart - 1);
-        });
+        setScrollOffset((prev) =>
+            nextScrollUp(prev, totalLinesRef.current, outputHeight),
+        );
     }, [outputHeight]);
 
     const pageDown = useCallback(() => {
-        setScrollOffset((prev) => {
-            if (prev === null) {
-                return null;
-            }
-
-            const maxOffset = Math.max(0, totalLinesRef.current - outputHeight);
-            const newOffset = prev + outputHeight;
-
-            return newOffset >= maxOffset ? null : newOffset;
-        });
+        setScrollOffset((prev) =>
+            nextPageDown(prev, totalLinesRef.current, outputHeight),
+        );
     }, [outputHeight]);
 
     const pageUp = useCallback(() => {
-        setScrollOffset((prev) => {
-            const currentStart =
-                prev ?? Math.max(0, totalLinesRef.current - outputHeight);
-            return Math.max(0, currentStart - outputHeight);
-        });
+        setScrollOffset((prev) =>
+            nextPageUp(prev, totalLinesRef.current, outputHeight),
+        );
     }, [outputHeight]);
 
     const scrollToTop = useCallback(() => {

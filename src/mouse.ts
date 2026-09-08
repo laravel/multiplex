@@ -306,3 +306,122 @@ export function sidebarRowAt(
 
     return index;
 }
+
+export type WheelContext = {
+    streamMode: boolean;
+    searchInputMode: boolean;
+    filterMode: boolean;
+    rows: number;
+    cols: number;
+    sidebarWidth: number;
+};
+
+export type WheelPlan =
+    | { kind: "scroll"; direction: "up" | "down"; lines: number }
+    | { kind: "none" };
+
+/**
+ * Decides what a mouse event does to the scroll position. Pure so the rules
+ * are unit-testable; the caller applies the plan through the same
+ * scrollUp/scrollDown Up/Down call, so clamping and the new-output indicator
+ * behave identically by construction.
+ */
+export function planWheelResponse(
+    event: MouseEvent,
+    ctx: WheelContext,
+): WheelPlan {
+    if (event.type !== "wheel-up" && event.type !== "wheel-down") {
+        return { kind: "none" };
+    }
+
+    // Keyboard scrolling is also dead while typing a search or filtering, so
+    // the wheel stays dead there too.
+    if (ctx.searchInputMode || ctx.filterMode) {
+        return { kind: "none" };
+    }
+
+    const inContent = mouseInContentViewport(
+        event.x,
+        event.y,
+        ctx.streamMode
+            ? { mode: "stream", rows: ctx.rows, cols: ctx.cols }
+            : {
+                  mode: "tabbed",
+                  rows: ctx.rows,
+                  cols: ctx.cols,
+                  sidebarWidth: ctx.sidebarWidth,
+              },
+    );
+
+    if (!inContent) {
+        return { kind: "none" };
+    }
+
+    return {
+        kind: "scroll",
+        direction: event.type === "wheel-up" ? "up" : "down",
+        lines: WHEEL_SCROLL_LINES,
+    };
+}
+
+export type ClickContext = {
+    streamMode: boolean;
+    searchInputMode: boolean;
+    filterMode: boolean;
+    rows: number;
+    cols: number;
+    sidebarWidth: number;
+    commandCount: number;
+};
+
+export type ClickPlan =
+    | { kind: "select-tab"; index: number }
+    | { kind: "focus-content" }
+    | { kind: "none" };
+
+/**
+ * Decides what a left click does to selection and focus. Pure so every case
+ * — a command row, the content pane, borders, empty space, the modal modes —
+ * is unit-testable; the caller applies the plan through the same setState
+ * calls the equivalent keypresses use.
+ */
+export function planClickResponse(
+    event: MouseEvent,
+    ctx: ClickContext,
+): ClickPlan {
+    if (event.type !== "left-click") {
+        return { kind: "none" };
+    }
+
+    // No sidebar and no focus state in stream mode; and like the wheel,
+    // clicks stay dead while a mode owns the keyboard, so a stray click
+    // cannot fight search or filter input.
+    if (ctx.streamMode || ctx.searchInputMode || ctx.filterMode) {
+        return { kind: "none" };
+    }
+
+    const row = sidebarRowAt(event.x, event.y, {
+        rows: ctx.rows,
+        sidebarWidth: ctx.sidebarWidth,
+        commandCount: ctx.commandCount,
+    });
+
+    if (row !== null) {
+        return { kind: "select-tab", index: row };
+    }
+
+    // Click where you want focus to be — the equivalent of Tab or the right
+    // arrow. Anything else is border or empty space and stays a no-op.
+    if (
+        mouseInContentViewport(event.x, event.y, {
+            mode: "tabbed",
+            rows: ctx.rows,
+            cols: ctx.cols,
+            sidebarWidth: ctx.sidebarWidth,
+        })
+    ) {
+        return { kind: "focus-content" };
+    }
+
+    return { kind: "none" };
+}

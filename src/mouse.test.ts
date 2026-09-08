@@ -4,12 +4,21 @@ import { describe, test } from "node:test";
 import {
     attachMouseListener,
     createMouseAccumulator,
+    type MouseEvent,
     mouseInContentViewport,
     parseMouseEvents,
+    planClickResponse,
+    planWheelResponse,
     sidebarRowAt,
     stripMouseSequences,
     WHEEL_SCROLL_LINES,
 } from "./mouse.js";
+
+const mouseAt = (
+    type: MouseEvent["type"],
+    x: number,
+    y: number,
+): MouseEvent => ({ type, x, y, button: 0, release: false, raw: "" });
 
 describe("parseMouseEvents", () => {
     test("returns no events for keyboard input and plain text", () => {
@@ -82,6 +91,41 @@ describe("parseMouseEvents", () => {
     test("ignores a sequence split across the end of the chunk", () => {
         assert.deepEqual(parseMouseEvents("ab\x1b[<0;5;1"), []);
         assert.deepEqual(parseMouseEvents("ab\x1b"), []);
+    });
+
+    test("ignores malformed sequences without throwing", () => {
+        assert.deepEqual(parseMouseEvents("\x1b[<;5;10M"), []);
+        assert.deepEqual(parseMouseEvents("\x1b[<a;5;10M"), []);
+        assert.deepEqual(parseMouseEvents("\x1b[<0;5M"), []);
+        assert.deepEqual(parseMouseEvents("\x1b[<0;5;10X"), []);
+        assert.deepEqual(parseMouseEvents("\x1b[<0;5;10"), []);
+        assert.deepEqual(parseMouseEvents("\x1b[<0;-5;10M"), []);
+        assert.deepEqual(parseMouseEvents("\x1b[<0;5;10MM"), [
+            {
+                type: "left-click",
+                x: 5,
+                y: 10,
+                button: 0,
+                release: false,
+                raw: "\x1b[<0;5;10M",
+            },
+        ]);
+    });
+
+    test("ignores the legacy X10 byte encoding", () => {
+        // Three raw bytes after ESC[M instead of decimal SGR parameters.
+        assert.deepEqual(parseMouseEvents("\x1b[M !!"), []);
+    });
+
+    test("skips coordinates too large to be exact", () => {
+        assert.deepEqual(
+            parseMouseEvents("\x1b[<99999999999999999999;1;1M"),
+            [],
+        );
+    });
+
+    test("treats a non-button release as other", () => {
+        assert.equal(parseMouseEvents("\x1b[<0;5;10m")[0]?.type, "other");
     });
 
     test("supports large coordinates past the old X10 overflow", () => {
@@ -266,5 +310,162 @@ describe("sidebarRowAt", () => {
         assert.equal(sidebarRowAt(80, 4, layout), null);
         assert.equal(sidebarRowAt(5, 1, layout), null);
         assert.equal(sidebarRowAt(5, 24, layout), null);
+    });
+});
+
+describe("planWheelResponse", () => {
+    const tabbed = {
+        streamMode: false,
+        searchInputMode: false,
+        filterMode: false,
+        rows: 24,
+        cols: 80,
+        sidebarWidth: 18,
+    };
+
+    test("scrolls three lines per tick over the content pane", () => {
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-up", 40, 10), tabbed),
+            {
+                kind: "scroll",
+                direction: "up",
+                lines: 3,
+            },
+        );
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-down", 40, 10), tabbed),
+            { kind: "scroll", direction: "down", lines: 3 },
+        );
+    });
+
+    test("ignores ticks over the sidebar and the chrome", () => {
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-up", 5, 10), tabbed),
+            {
+                kind: "none",
+            },
+        );
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-up", 40, 2), tabbed),
+            { kind: "none" },
+        );
+    });
+
+    test("ignores anything but wheel events", () => {
+        assert.deepEqual(
+            planWheelResponse(mouseAt("left-click", 40, 10), tabbed),
+            { kind: "none" },
+        );
+        assert.deepEqual(planWheelResponse(mouseAt("other", 40, 10), tabbed), {
+            kind: "none",
+        });
+    });
+
+    test("stays dead while search or filter owns the keyboard", () => {
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-up", 40, 10), {
+                ...tabbed,
+                searchInputMode: true,
+            }),
+            { kind: "none" },
+        );
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-up", 40, 10), {
+                ...tabbed,
+                filterMode: true,
+            }),
+            { kind: "none" },
+        );
+    });
+
+    test("works in stream mode wherever output scrolls", () => {
+        const stream = { ...tabbed, streamMode: true };
+
+        assert.deepEqual(
+            planWheelResponse(mouseAt("wheel-up", 40, 10), stream),
+            {
+                kind: "scroll",
+                direction: "up",
+                lines: 3,
+            },
+        );
+    });
+});
+
+describe("planClickResponse", () => {
+    const tabbed = {
+        streamMode: false,
+        searchInputMode: false,
+        filterMode: false,
+        rows: 24,
+        cols: 80,
+        sidebarWidth: 18,
+        commandCount: 3,
+    };
+
+    test("selects the command in the clicked row", () => {
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 5, 3), tabbed),
+            { kind: "select-tab", index: 0 },
+        );
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 5, 4), tabbed),
+            { kind: "select-tab", index: 1 },
+        );
+    });
+
+    test("moves focus to the content pane", () => {
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 40, 10), tabbed),
+            { kind: "focus-content" },
+        );
+    });
+
+    test("ignores borders and empty space", () => {
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 18, 4), tabbed),
+            { kind: "none" },
+        );
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 5, 6), tabbed),
+            { kind: "none" },
+        );
+    });
+
+    test("ignores clicks in stream mode and modal modes", () => {
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 5, 4), {
+                ...tabbed,
+                streamMode: true,
+            }),
+            { kind: "none" },
+        );
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 5, 4), {
+                ...tabbed,
+                searchInputMode: true,
+            }),
+            { kind: "none" },
+        );
+        assert.deepEqual(
+            planClickResponse(mouseAt("left-click", 5, 4), {
+                ...tabbed,
+                filterMode: true,
+            }),
+            { kind: "none" },
+        );
+    });
+
+    test("ignores anything but a left press", () => {
+        assert.deepEqual(planClickResponse(mouseAt("wheel-up", 5, 4), tabbed), {
+            kind: "none",
+        });
+        assert.deepEqual(
+            planClickResponse(
+                { ...mouseAt("left-click", 5, 4), type: "left-release" },
+                tabbed,
+            ),
+            { kind: "none" },
+        );
     });
 });

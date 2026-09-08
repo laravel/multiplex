@@ -4,8 +4,10 @@ import { describe, test } from "node:test";
 import {
     attachMouseListener,
     createMouseAccumulator,
+    mouseInContentViewport,
     parseMouseEvents,
     stripMouseSequences,
+    WHEEL_SCROLL_LINES,
 } from "./mouse.js";
 
 describe("parseMouseEvents", () => {
@@ -172,5 +174,58 @@ describe("attachMouseListener", () => {
         assert.deepEqual(seen, ["left-click"]);
 
         detach();
+    });
+});
+
+describe("mouseInContentViewport", () => {
+    test("wheel step is a few lines, not a full page", () => {
+        assert.ok(WHEEL_SCROLL_LINES >= 2 && WHEEL_SCROLL_LINES <= 5);
+    });
+
+    test("stream mode covers the output rows but not the chrome", () => {
+        const viewport = { mode: "stream", rows: 24, cols: 80 } as const;
+
+        assert.equal(mouseInContentViewport(1, 3, viewport), true);
+        assert.equal(mouseInContentViewport(80, 22, viewport), true);
+        // Header rows, spacer and footer are not scrollable.
+        assert.equal(mouseInContentViewport(40, 1, viewport), false);
+        assert.equal(mouseInContentViewport(40, 2, viewport), false);
+        assert.equal(mouseInContentViewport(40, 23, viewport), false);
+        assert.equal(mouseInContentViewport(40, 24, viewport), false);
+        assert.equal(mouseInContentViewport(0, 10, viewport), false);
+        assert.equal(mouseInContentViewport(81, 10, viewport), false);
+    });
+
+    test("tabbed mode excludes the sidebar, borders and header", () => {
+        const viewport = {
+            mode: "tabbed",
+            rows: 24,
+            cols: 80,
+            sidebarWidth: 18,
+        } as const;
+
+        assert.equal(mouseInContentViewport(20, 5, viewport), true);
+        assert.equal(mouseInContentViewport(79, 22, viewport), true);
+        // Sidebar and the content box's own left border.
+        assert.equal(mouseInContentViewport(18, 10, viewport), false);
+        assert.equal(mouseInContentViewport(19, 10, viewport), false);
+        assert.equal(mouseInContentViewport(1, 10, viewport), false);
+        // Right border, top chrome and footer.
+        assert.equal(mouseInContentViewport(80, 10, viewport), false);
+        assert.equal(mouseInContentViewport(40, 2, viewport), false);
+        assert.equal(mouseInContentViewport(40, 3, viewport), false);
+        assert.equal(mouseInContentViewport(40, 4, viewport), false);
+        assert.equal(mouseInContentViewport(40, 23, viewport), false);
+        assert.equal(mouseInContentViewport(40, 24, viewport), false);
+    });
+
+    test("follows the current dimensions, not a stale layout", () => {
+        // A resize moves every region: the same coordinates scroll before a
+        // shrink and miss after it.
+        const before = { mode: "stream", rows: 24, cols: 80 } as const;
+        const after = { mode: "stream", rows: 12, cols: 80 } as const;
+
+        assert.equal(mouseInContentViewport(40, 20, before), true);
+        assert.equal(mouseInContentViewport(40, 20, after), false);
     });
 });

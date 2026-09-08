@@ -228,3 +228,42 @@ export function attachMouseListener(
         stdin.removeListener("data", onData);
     };
 }
+
+/**
+ * Lines scrolled per wheel tick. Keyboard Up/Down move one line and PageUp/
+ * PageDown move a full pane; the wheel sits between the two at three lines,
+ * the step most terminal apps (less, vim with `set mouse=a`) use.
+ */
+export const WHEEL_SCROLL_LINES = 3;
+
+export type ContentViewport =
+    | { mode: "stream"; rows: number; cols: number }
+    | { mode: "tabbed"; rows: number; cols: number; sidebarWidth: number };
+
+/**
+ * Whether 1-based terminal coordinates fall on the scrollable output rows:
+ * inside the content pane and clear of borders, headers and the footer, so a
+ * wheel tick over the sidebar or the chrome never scrolls. Coordinates are
+ * compared against the caller's current render dimensions — pass the live
+ * rows/cols, not a cached copy, because a resize moves every region below it.
+ */
+export function mouseInContentViewport(
+    x: number,
+    y: number,
+    viewport: ContentViewport,
+): boolean {
+    if (viewport.mode === "stream") {
+        // Header rows 1-2, output 3..rows-2, spacer and footer after that.
+        return x >= 1 && x <= viewport.cols && y >= 3 && y <= viewport.rows - 2;
+    }
+
+    // Sidebar and the content box's left border end at sidebarWidth + 1, the
+    // right border sits at cols; the box's top border, command header and its
+    // rule occupy rows 2-4, the bottom border row rows - 1.
+    return (
+        x >= viewport.sidebarWidth + 2 &&
+        x <= viewport.cols - 1 &&
+        y >= 5 &&
+        y <= viewport.rows - 2
+    );
+}

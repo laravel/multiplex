@@ -2,6 +2,12 @@ import { homedir } from "node:os";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { contrastText } from "./color.js";
+import {
+    attachMouseListener,
+    type MouseEvent,
+    mouseInContentViewport,
+    WHEEL_SCROLL_LINES,
+} from "./mouse.js";
 import { highlightLine, indexMatches } from "./search.js";
 import type { CommandDef, OutputRef, SupervisorRef } from "./types.js";
 import { useProcesses } from "./use-processes.js";
@@ -560,6 +566,72 @@ export function App({
         cols,
         timestamps,
     );
+
+    // The wheel scrolls whatever output pane the cursor is over, through the
+    // same scrollUp/scrollDown Up/Down call — clamping and the new-output
+    // indicator behave identically by construction. It never touches the
+    // selected tab or keyboard focus; over the sidebar it is a no-op.
+    // Re-subscribing on rows/cols/mode keeps the hit test on the current
+    // layout rather than a pre-resize one.
+    useEffect(() => {
+        const onMouse = (event: MouseEvent) => {
+            if (process.env.MULTIPLEX_MOUSE_DEBUG) {
+                try {
+                    process.stderr.write(
+                        `[mouse] ${event.type} x=${event.x} y=${event.y} button=${event.button}${event.release ? " release" : ""}\n`,
+                    );
+                } catch {
+                    //
+                }
+            }
+
+            if (event.type !== "wheel-up" && event.type !== "wheel-down") {
+                return;
+            }
+
+            // Keyboard scrolling is also dead while typing a search or
+            // filtering, so the wheel stays dead there too.
+            if (searchInputMode || filterMode) {
+                return;
+            }
+
+            const inContent = mouseInContentViewport(
+                event.x,
+                event.y,
+                streamMode
+                    ? { mode: "stream", rows, cols }
+                    : {
+                          mode: "tabbed",
+                          rows,
+                          cols,
+                          sidebarWidth: computedSidebarWidth,
+                      },
+            );
+
+            if (!inContent) {
+                return;
+            }
+
+            for (let i = 0; i < WHEEL_SCROLL_LINES; i++) {
+                if (event.type === "wheel-up") {
+                    scrollUp();
+                } else {
+                    scrollDown();
+                }
+            }
+        };
+
+        return attachMouseListener(onMouse);
+    }, [
+        rows,
+        cols,
+        streamMode,
+        computedSidebarWidth,
+        searchInputMode,
+        filterMode,
+        scrollUp,
+        scrollDown,
+    ]);
 
     // renderTick stands in for the ref contents React cannot see change.
     const displayLines = useMemo(() => {

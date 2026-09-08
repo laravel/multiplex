@@ -6,6 +6,7 @@ import {
     createMouseAccumulator,
     mouseInContentViewport,
     parseMouseEvents,
+    sidebarRowAt,
     stripMouseSequences,
     WHEEL_SCROLL_LINES,
 } from "./mouse.js";
@@ -227,5 +228,43 @@ describe("mouseInContentViewport", () => {
 
         assert.equal(mouseInContentViewport(40, 20, before), true);
         assert.equal(mouseInContentViewport(40, 20, after), false);
+    });
+});
+
+describe("sidebarRowAt", () => {
+    const layout = { rows: 24, sidebarWidth: 18, commandCount: 3 };
+
+    test("maps each command row index-based from row 3", () => {
+        assert.equal(sidebarRowAt(5, 3, layout), 0);
+        assert.equal(sidebarRowAt(5, 4, layout), 1);
+        assert.equal(sidebarRowAt(5, 5, layout), 2);
+    });
+
+    test("ignores the box borders", () => {
+        // Left and right border columns.
+        assert.equal(sidebarRowAt(1, 4, layout), null);
+        assert.equal(sidebarRowAt(18, 4, layout), null);
+        // Top border row and bottom border row.
+        assert.equal(sidebarRowAt(5, 2, layout), null);
+        assert.equal(sidebarRowAt(5, 23, layout), null);
+    });
+
+    test("ignores empty space past the last command", () => {
+        assert.equal(sidebarRowAt(5, 6, layout), null);
+        assert.equal(sidebarRowAt(5, 22, layout), null);
+    });
+
+    test("ignores rows clipped off screen", () => {
+        const crowded = { rows: 10, sidebarWidth: 18, commandCount: 9 };
+
+        assert.equal(sidebarRowAt(5, 8, crowded), 5);
+        assert.equal(sidebarRowAt(5, 9, crowded), null);
+    });
+
+    test("ignores clicks outside the sidebar entirely", () => {
+        assert.equal(sidebarRowAt(19, 4, layout), null);
+        assert.equal(sidebarRowAt(80, 4, layout), null);
+        assert.equal(sidebarRowAt(5, 1, layout), null);
+        assert.equal(sidebarRowAt(5, 24, layout), null);
     });
 });

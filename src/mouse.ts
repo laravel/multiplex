@@ -267,3 +267,42 @@ export function mouseInContentViewport(
         y <= viewport.rows - 2
     );
 }
+
+export type SidebarLayout = {
+    rows: number;
+    sidebarWidth: number;
+    commandCount: number;
+};
+
+/**
+ * Maps 1-based terminal coordinates to a sidebar row index, or null when the
+ * click is not on a command row: outside the box, on its border, on empty
+ * space below the last command, or past the rows that fit on screen.
+ *
+ * Offset math: the tabbed layout stacks a 1-row title header above a middle
+ * row whose sidebar box draws its top border on terminal row 2, so the first
+ * command row is terminal row 3 and command i sits at 3 + i. The sidebar's
+ * own left/right borders are columns 1 and sidebarWidth, hence excluded.
+ */
+export function sidebarRowAt(
+    x: number,
+    y: number,
+    layout: SidebarLayout,
+): number | null {
+    if (x < 2 || x > layout.sidebarWidth - 1) {
+        return null;
+    }
+
+    const index = y - 3;
+
+    if (index < 0 || index >= layout.commandCount) {
+        return null;
+    }
+
+    // Past the last visible row: clipped by Ink, or into the bottom border.
+    if (y > layout.rows - 2) {
+        return null;
+    }
+
+    return index;
+}

@@ -6,6 +6,7 @@ import {
     attachMouseListener,
     type MouseEvent,
     mouseInContentViewport,
+    sidebarRowAt,
     WHEEL_SCROLL_LINES,
 } from "./mouse.js";
 import { highlightLine, indexMatches } from "./search.js";
@@ -585,6 +586,48 @@ export function App({
                 }
             }
 
+            if (event.type === "left-click") {
+                // No sidebar and no focus state in stream mode; and like the
+                // wheel, clicks stay dead while a mode owns the keyboard, so
+                // a stray click cannot fight search or filter input.
+                if (streamMode || searchInputMode || filterMode) {
+                    return;
+                }
+
+                const row = sidebarRowAt(event.x, event.y, {
+                    rows,
+                    sidebarWidth: computedSidebarWidth,
+                    commandCount: commandDefs.length,
+                });
+
+                if (row !== null) {
+                    // Exactly what pressing the tab's number key does, plus
+                    // the focus Tab would have given it.
+                    setSelectedIndex(row);
+                    setCurrentMatch(0);
+                    scrollToBottom();
+                    setFocus("sidebar");
+
+                    return;
+                }
+
+                // Click where you want focus to be — the equivalent of Tab or
+                // the right arrow. Anything else is border or empty space and
+                // stays a no-op.
+                if (
+                    mouseInContentViewport(event.x, event.y, {
+                        mode: "tabbed",
+                        rows,
+                        cols,
+                        sidebarWidth: computedSidebarWidth,
+                    })
+                ) {
+                    setFocus("content");
+                }
+
+                return;
+            }
+
             if (event.type !== "wheel-up" && event.type !== "wheel-down") {
                 return;
             }
@@ -629,8 +672,10 @@ export function App({
         computedSidebarWidth,
         searchInputMode,
         filterMode,
+        commandDefs.length,
         scrollUp,
         scrollDown,
+        scrollToBottom,
     ]);
 
     // renderTick stands in for the ref contents React cannot see change.

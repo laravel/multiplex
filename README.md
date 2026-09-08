@@ -219,6 +219,16 @@ Use `--no-restart` to turn it off entirely, for one-shot commands like builds or
 | `Esc` | Cancel search / clear results |
 | `n` / `N` | Next / previous match |
 
+### Mouse
+
+| Action | Effect |
+| --- | --- |
+| Scroll wheel | Scroll the output under the cursor, three lines per tick |
+| Click a sidebar label | Jump to that tab |
+| Click the output pane | Move focus there |
+
+The mouse mirrors the keyboard: scrolling behaves like `Up`/`Down`, clicking a label jumps to that tab and focuses the sidebar, clicking the output like `Tab`. Clicks are ignored while search or filter input is open. Terminals without mouse support simply send no events, so the keyboard keeps working unchanged.
+
 ## Features
 
 - **Inline mode** when there's no TTY or no room for one, so pipes, CI and tiny terminals get labelled output and a real exit code instead of an error
@@ -226,6 +236,7 @@ Use `--no-restart` to turn it off entirely, for one-shot commands like builds or
 - **Tabbed view** with a sidebar showing all running commands
 - **Stream mode** for interleaved output with colored labels, with per-command filtering
 - **Search** with ANSI-aware highlighting across output
+- **Mouse support** — scroll the output under the cursor and switch tabs by clicking their labels
 - **Timestamps** on output lines in both tabbed and stream modes
 - **Auto-restart** crashed processes with a 5-attempt limit
 - **Desktop notifications** when a process permanently fails

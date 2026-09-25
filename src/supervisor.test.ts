@@ -195,11 +195,11 @@ describe("createSupervisor", () => {
 /**
  * Waits for the command's process group to empty out.
  *
- * Polls rather than asserting outright, because `terminate()` can only wait on
- * the process it spawned, and the thing that outlives it is a grandchild: `sh`
- * is reaped by us, its `sleep` is reparented to init and reaped whenever init
- * gets to it. Signal 0 counts a process that has died but not yet been reaped,
- * so checking the instant terminate() returns asks the supervisor to guarantee
+ * Polls rather than asserting outright, because the thing that outlives the
+ * process we spawned is a grandchild: `sh` is reaped by us, its `sleep` is
+ * reparented to init and reaped whenever init gets to it. Signal 0 counts a
+ * process that has died but not yet been reaped, so checking the instant
+ * terminate() returns asks the supervisor to guarantee
  * someone else's bookkeeping. What it does guarantee is that the whole group
  * was signalled, and anything that survived that never goes away, so a real
  * leak still fails here on the timeout.
@@ -299,6 +299,34 @@ describe("supervisor.terminate", () => {
             assert.throws(
                 () => readFileSync(marker),
                 "cleanup handler never ran, the file is still there",
+            );
+            assert.ok(
+                await groupGone(supervisor, 0),
+                "the process group outlived the shutdown",
+            );
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    // Wrappers like `npm run` exit on SIGTERM before the server under them has cleaned up.
+    it("waits for a wrapped command's cleanup, not just the wrapper", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "multiplex-"));
+        const marker = join(dir, "hot");
+
+        try {
+            const supervisor = await running([
+                cmd(
+                    "a",
+                    `(trap 'sleep 0.3; rm -f "${marker}"; exit 0' TERM; : > "${marker}"; echo up; while :; do sleep 0.05; done) & wait`,
+                ),
+            ]);
+
+            await supervisor.terminate();
+
+            assert.throws(
+                () => readFileSync(marker),
+                "the wrapped command was killed before its cleanup ran",
             );
             assert.ok(
                 await groupGone(supervisor, 0),

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.4.5 - 2026-09-29
+
+### What's Changed
+
+* Bump the npm group with 4 updates by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/multiplex/pull/31
+* Wait for the whole process group before killing on shutdown by [@benddailey](https://github.com/benddailey) in https://github.com/laravel/multiplex/pull/30
+
+### New Contributors
+
+* [@benddailey](https://github.com/benddailey) made their first contribution in https://github.com/laravel/multiplex/pull/30
+
+**Full Changelog**: https://github.com/laravel/multiplex/compare/v0.4.4...v0.4.5
+
 ## v0.4.4 - 2026-09-22
 
 ### What's Changed

@@ -4,12 +4,16 @@ export type CommandDef = {
     label: string;
     color: string;
     command: string;
+    cwd?: string;
+    env?: any;
 };
 
 export type CommandInput = {
     label: string;
     command: string;
     color?: string;
+    cwd?: string;
+    env?: any;
 };
 
 export type MultiplexOptions = {

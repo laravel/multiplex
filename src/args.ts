@@ -84,7 +84,7 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
                 throw new Error(badColor(cmd.color, cmd.label));
             }
 
-            return { label: cmd.label, color: explicit, command: cmd.command };
+            return { label: cmd.label, color: explicit, command: cmd.command, cwd: cmd.cwd, env: cmd.env };
         }
 
         const available = DEFAULT_COLORS.filter((c) => !used.has(c));
@@ -95,7 +95,7 @@ export function normalizeCommands(commands: CommandInput[]): CommandDef[] {
 
         used.add(color);
 
-        return { label: cmd.label, color, command: cmd.command };
+        return { label: cmd.label, color, command: cmd.command, cwd: cmd.cwd, env: cmd.env };
     });
 }
 

@@ -220,6 +220,7 @@ export function createSupervisor({
     function spawnProcess(cmd: CommandDef, i: number): ChildProcess {
         const env: NodeJS.ProcessEnv = {
             ...process.env,
+            ...cmd?.env ?? {},
             COLUMNS: String(columns),
         };
 
@@ -228,7 +229,7 @@ export function createSupervisor({
         }
 
         const proc = spawn("sh", ["-c", cmd.command], {
-            cwd,
+            cwd: cmd.cwd ?? cwd,
             detached: true,
             env,
             stdio: ["ignore", "pipe", "pipe"],

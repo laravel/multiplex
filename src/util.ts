@@ -22,9 +22,18 @@ export const formatTimestamp = (time: Date) =>
 const MIN_SIDEBAR_WIDTH = 15;
 const MAX_SIDEBAR_WIDTH = 40;
 
+// The index column before a row's label: " N ". N is widened to fit the
+// largest index (two digits once there are 10+ commands) so a 1-digit cell
+// does not visually collide with a 2-digit one in the row below.
+export function sidebarIndexWidth(count: number): number {
+    return Math.max(1, String(Math.max(1, count)).length);
+}
+
 export function sidebarWidth(labels: string[], totalColumns: number): number {
     const maxLen = Math.max(...labels.map((l) => l.length));
-    const labelWidth = maxLen + 7;
+    const indicatorCell = sidebarIndexWidth(labels.length) + 2;
+    // label + leading/trailing border chrome + the full indicator cell
+    const labelWidth = maxLen + 4 + indicatorCell;
     const targetWidth = Math.floor(totalColumns * 0.15);
 
     return Math.max(

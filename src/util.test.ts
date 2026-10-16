@@ -9,6 +9,7 @@ import {
     MIN_COLUMNS,
     MIN_ROWS,
     sanitizeTitle,
+    sidebarIndexWidth,
     sidebarWidth,
     singleLine,
     wrapLine,
@@ -251,6 +252,37 @@ describe("sidebarWidth", () => {
             sidebarWidth(["a", "longest-label"], 200),
             sidebarWidth(["longest-label"], 200),
         );
+    });
+
+    // The sidebar reserves room for the index column, which widens by one
+    // column at the 10-command boundary. Without this, long labels on a dense
+    // sidebar overflow by a character once index labels go two digits.
+    test("widens the label reservation when the index column grows", () => {
+        const nine = Array.from({ length: 9 }, () => "longest-label-x");
+        const ten = Array.from({ length: 10 }, () => "longest-label-x");
+
+        assert.equal(sidebarWidth(nine, 80), sidebarWidth(ten, 80) - 1);
+    });
+});
+
+describe("sidebarIndexWidth", () => {
+    test("returns 1 for 1–9 commands", () => {
+        assert.equal(sidebarIndexWidth(1), 1);
+        assert.equal(sidebarIndexWidth(9), 1);
+    });
+
+    test("returns 2 for 10–99 commands", () => {
+        assert.equal(sidebarIndexWidth(10), 2);
+        assert.equal(sidebarIndexWidth(99), 2);
+    });
+
+    test("returns 3 for 100+ commands", () => {
+        assert.equal(sidebarIndexWidth(100), 3);
+    });
+
+    test("defaults to 1 on an empty or non-positive count", () => {
+        assert.equal(sidebarIndexWidth(0), 1);
+        assert.equal(sidebarIndexWidth(-1), 1);
     });
 });
 

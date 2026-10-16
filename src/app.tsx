@@ -11,6 +11,7 @@ import {
     formatStreamLabel,
     MIN_TABS_LAYOUT_WIDTH,
     minTabsLayoutHeight,
+    sidebarIndexWidth,
     sidebarWidth,
     singleLine,
     tabbedTextWidth,
@@ -192,7 +193,7 @@ export function App({
                                     dimColor={hidden}
                                     bold
                                 >
-                                    {i < 9 ? `${i + 1}` : " "}{" "}
+                                    {String(i + 1).padStart(indexWidth)}{" "}
                                 </Text>
                                 <Text
                                     color={hidden ? "#555555" : cmd.color}
@@ -554,6 +555,7 @@ export function App({
         commandDefs.map((c) => c.label),
         cols,
     );
+    const indexWidth = sidebarIndexWidth(commandDefs.length);
 
     const tabbedWrapWidth = tabbedTextWidth(
         commandDefs.map((c) => c.label),
@@ -770,14 +772,14 @@ export function App({
                             indicator = spinnerChar;
                             indicatorColor = selected ? onFill : cmd.color;
                         } else {
-                            indicator = i < 9 ? `${i + 1}` : " ";
+                            indicator = String(i + 1).padStart(indexWidth);
                             indicatorColor = selected ? onFill : "#555555";
                             dim = !selected;
                         }
 
                         const pad = Math.max(
                             0,
-                            innerWidth - 3 - cmd.label.length,
+                            innerWidth - 2 - indexWidth - cmd.label.length,
                         );
                         const bg = selected ? cmd.color : undefined;
                         return (

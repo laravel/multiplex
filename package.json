@@ -56,7 +56,7 @@
         "ansi-styles": "^7.0.0",
         "commander": "^15.0.0",
         "ink": "^7.1.0",
-        "react": "^19.2.7",
+        "react": "^19.2.0",
         "string-width": "^8.2.2",
         "wrap-ansi": "^10.0.0"
     },
